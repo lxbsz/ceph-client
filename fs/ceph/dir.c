@@ -1027,36 +1027,31 @@ static int ceph_link(struct dentry *old_dentry, struct inode *dir,
 int ceph_async_dirop_request_wait(struct inode *inode)
 {
 	struct ceph_inode_info *ci = ceph_inode(inode);
-	struct ceph_mds_request *req = NULL;
+	struct ceph_mds_request *cur, *req;
 	int ret = 0;
 
 	/* Only applicable for directories */
 	if (!inode || !S_ISDIR(inode->i_mode))
 		return 0;
-
+retry:
 	spin_lock(&ci->i_unsafe_lock);
-	if (!list_empty(&ci->i_unsafe_dirops)) {
-		struct ceph_mds_request *last;
-		last = list_last_entry(&ci->i_unsafe_dirops,
-				       struct ceph_mds_request,
-				       r_unsafe_dir_item);
-		/*
-		 * If last request hasn't gotten a reply, then wait
-		 * for it.
-		 */
-		if (!test_bit(CEPH_MDS_R_GOT_UNSAFE, &last->r_req_flags) &&
-		    !test_bit(CEPH_MDS_R_GOT_SAFE, &last->r_req_flags)) {
-			req = last;
+	req = NULL;
+	list_for_each_entry(cur, &ci->i_unsafe_dirops, r_unsafe_dir_item) {
+		if (!test_bit(CEPH_MDS_R_GOT_UNSAFE, &cur->r_req_flags) &&
+		    !test_bit(CEPH_MDS_R_GOT_SAFE, &cur->r_req_flags)) {
+			req = cur;
 			ceph_mdsc_get_request(req);
+			break;
 		}
 	}
 	spin_unlock(&ci->i_unsafe_lock);
-
 	if (req) {
-		dout("%s %p wait on tid %llu\n", __func__, inode,
-		     req ? req->r_tid : 0ULL);
+		dout("%s %lx wait on tid %llu\n", __func__, inode->i_ino,
+		     req->r_tid);
 		ret = wait_for_completion_killable(&req->r_completion);
 		ceph_mdsc_put_request(req);
+		if (!ret)
+			goto retry;
 	}
 	return ret;
 }
