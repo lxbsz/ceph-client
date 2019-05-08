@@ -1046,8 +1046,8 @@ retry:
 	}
 	spin_unlock(&ci->i_unsafe_lock);
 	if (req) {
-		dout("%s %lx wait on tid %llu\n", __func__, inode->i_ino,
-		     req->r_tid);
+		printk("%s %lx wait on tid %llu\n", __func__, inode->i_ino,
+			req->r_tid);
 		ret = wait_for_completion_killable(&req->r_completion);
 		ceph_mdsc_put_request(req);
 		if (!ret)
@@ -1063,6 +1063,8 @@ static void ceph_async_unlink_cb(struct ceph_mds_client *mdsc,
 
 	/* If op failed, set error on parent directory */
 	mapping_set_error(req->r_parent->i_mapping, req->r_err);
+	if (req->r_err)
+		printk("%s: req->r_err = %d\n", __func__, req->r_err);
 	ceph_put_cap_refs(ci, CEPH_CAP_LINK_EXCL);
 	ceph_put_cap_refs(ceph_inode(req->r_parent), CEPH_CAP_FILE_EXCL);
 	iput(req->r_old_inode);
@@ -1110,6 +1112,8 @@ static int ceph_unlink(struct inode *dir, struct dentry *dentry)
 	req->r_inode_drop = ceph_drop_caps_for_unlink(inode);
 
 	if (ceph_get_caps_for_dirop(dir, dentry)) {
+		if (op == CEPH_MDS_OP_RMDIR)
+			printk("%s: async rmdir of %lx", __func__, inode->i_ino);
 		/* Keep LINK caps to ensure continuity over async call */
 		req->r_inode_drop &= ~(CEPH_CAP_LINK_SHARED|CEPH_CAP_LINK_EXCL);
 		req->r_callback = ceph_async_unlink_cb;
@@ -1123,12 +1127,16 @@ static int ceph_unlink(struct inode *dir, struct dentry *dentry)
 			 */
 			drop_nlink(inode);
 			d_delete(dentry);
+		} else {
+			printk("%s: ceph_mdsc_submit_request returned %d\n", __func__, err);
 		}
 	} else {
 		set_bit(CEPH_MDS_R_PARENT_LOCKED, &req->r_req_flags);
 		err = ceph_mdsc_do_request(mdsc, dir, req);
 		if (!err && !req->r_reply_info.head->is_dentry)
 			d_delete(dentry);
+		if (op == CEPH_MDS_OP_RMDIR)
+			printk("%s: sync rmdir of %lx returned %d", __func__, inode->i_ino, err);
 	}
 
 	ceph_mdsc_put_request(req);

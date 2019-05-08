@@ -1446,7 +1446,7 @@ retry_lookup:
 				session, req->r_request_started, ptvino,
 				&dvino);
 		} else {
-			dout("%s: no dentry lease or dir cap\n", __func__);
+			printk("%s: no dentry lease or dir cap\n", __func__);
 		}
 	}
 done:
