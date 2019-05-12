@@ -1016,7 +1016,11 @@ int __ceph_caps_file_wanted(struct ceph_inode_info *ci)
 int __ceph_caps_wanted(struct ceph_inode_info *ci)
 {
 	int w = __ceph_caps_file_wanted(ci) | __ceph_caps_used(ci);
-	if (!S_ISDIR(ci->vfs_inode.i_mode)) {
+	if (S_ISDIR(ci->vfs_inode.i_mode)) {
+		/* we want EXCL if holding caps of dir ops */
+		if (w & CEPH_CAP_ANY_DIR_OPS)
+			w |= CEPH_CAP_FILE_EXCL;
+	} else {
 		/* we want EXCL if dirty data */
 		if (w & CEPH_CAP_FILE_BUFFER)
 			w |= CEPH_CAP_FILE_EXCL;
@@ -1907,10 +1911,13 @@ retry_locked:
 			 * revoking the shared cap on every create/unlink
 			 * operation.
 			 */
-			if (IS_RDONLY(inode))
+			if (IS_RDONLY(inode)) {
 				want = CEPH_CAP_ANY_SHARED;
-			else
-				want = CEPH_CAP_ANY_SHARED | CEPH_CAP_FILE_EXCL;
+			} else {
+				want = CEPH_CAP_ANY_SHARED |
+				       CEPH_CAP_FILE_EXCL |
+				       CEPH_CAP_ANY_DIR_OPS;
+			}
 			retain |= want;
 		} else {
 
@@ -2643,7 +2650,10 @@ again:
 				}
 				snap_rwsem_locked = true;
 			}
-			*got = need | (have & want);
+			if ((have & want) == want)
+				*got = need | want;
+			else
+				*got = need;
 			if (S_ISREG(inode->i_mode) &&
 			    (need & CEPH_CAP_FILE_RD) &&
 			    !(*got & CEPH_CAP_FILE_CACHE))
@@ -2699,28 +2709,6 @@ out_unlock:
 	return ret;
 }
 
-bool ceph_get_caps_for_dirop(struct inode *dir, struct dentry *dentry)
-{
-	int err, got;
-	struct ceph_inode_info *ci = ceph_inode(d_inode(dentry));
-
-	/* Ensure we have Lx on the inode being unlinked */
-	err = try_get_cap_refs(ci, 0, CEPH_CAP_LINK_EXCL, 0, true, &got);
-	dout("Lx on %p err=%d got=%d\n", dentry, err, got);
-	if (err != 1 || !(got & CEPH_CAP_LINK_EXCL))
-		return false;
-
-	/* Do we have Fx on the dir ? */
-	err = try_get_cap_refs(ceph_inode(dir), 0, CEPH_CAP_FILE_EXCL, 0,
-				true, &got);
-	dout("Fx on %p err=%d got=%d\n", dir, err, got);
-	if (err != 1 || !(got & CEPH_CAP_FILE_EXCL)) {
-		ceph_put_cap_refs(ci, CEPH_CAP_LINK_EXCL);
-		return false;
-	}
-	return true;
-}
-
 /*
  * Check the offset we are writing up to against our current
  * max_size.  If necessary, tell the MDS we want to write to
@@ -2755,11 +2743,15 @@ int ceph_try_get_caps(struct ceph_inode_info *ci, int need, int want,
 	int ret;
 
 	BUG_ON(need & ~CEPH_CAP_FILE_RD);
-	BUG_ON(want & ~(CEPH_CAP_FILE_CACHE|CEPH_CAP_FILE_LAZYIO|CEPH_CAP_FILE_SHARED));
-	ret = ceph_pool_perm_check(ci, need);
-	if (ret < 0)
-		return ret;
+	if (need) {
+		ret = ceph_pool_perm_check(ci, need);
+		if (ret < 0)
+			return ret;
+	}
 
+	BUG_ON(want & ~(CEPH_CAP_FILE_CACHE | CEPH_CAP_FILE_LAZYIO |
+			CEPH_CAP_FILE_SHARED | CEPH_CAP_FILE_EXCL |
+			CEPH_CAP_ANY_DIR_OPS));
 	ret = try_get_cap_refs(ci, need, want, 0, nonblock, got);
 	return ret == -EAGAIN ? 0 : ret;
 }
