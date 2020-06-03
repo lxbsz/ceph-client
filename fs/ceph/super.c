@@ -1282,6 +1282,35 @@ static void __exit exit_ceph(void)
 	destroy_caches();
 }
 
+static int param_set_metric_interval(const char *val, const struct kernel_param *kp)
+{
+	int ret;
+	unsigned int interval;
+
+	ret = kstrtouint(val, 0, &interval);
+	if (ret < 0) {
+		pr_err("Failed to parse metric interval '%s'\n", val);
+		return ret;
+	}
+
+	if (interval > 5 || interval < 1) {
+		pr_err("Invalid metric interval %u\n", interval);
+		return -EINVAL;
+	}
+
+	metric_send_interval = interval;
+	return 0;
+}
+
+static const struct kernel_param_ops param_ops_metric_interval = {
+	.set = param_set_metric_interval,
+	.get = param_get_uint,
+};
+
+unsigned int metric_send_interval = 1;
+module_param_cb(metric_send_interval, &param_ops_metric_interval, &metric_send_interval, 0644);
+MODULE_PARM_DESC(metric_send_interval, "Interval (in seconds) of sending perf metric to ceph cluster, valid values are 1~5 (default: 1)");
+
 module_init(init_ceph);
 module_exit(exit_ceph);
 
