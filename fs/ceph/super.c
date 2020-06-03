@@ -1282,6 +1282,10 @@ static void __exit exit_ceph(void)
 	destroy_caches();
 }
 
+unsigned int metric_send_interval;
+module_param(metric_send_interval, uint, 0644);
+MODULE_PARM_DESC(metric_send_interval, "Interval (in seconds) of sending perf metric to ceph cluster (default: 0)");
+
 module_init(init_ceph);
 module_exit(exit_ceph);
 
