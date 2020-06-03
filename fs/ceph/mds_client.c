@@ -4625,6 +4625,7 @@ void ceph_mdsc_close_sessions(struct ceph_mds_client *mdsc)
 
 	cancel_work_sync(&mdsc->cap_reclaim_work);
 	cancel_delayed_work_sync(&mdsc->delayed_work); /* cancel timer */
+	cancel_delayed_work_sync(&mdsc->metric.delayed_work); /* cancel timer */
 
 	dout("stopped\n");
 }
@@ -4667,6 +4668,7 @@ static void ceph_mdsc_stop(struct ceph_mds_client *mdsc)
 {
 	dout("stop\n");
 	cancel_delayed_work_sync(&mdsc->delayed_work); /* cancel timer */
+	cancel_delayed_work_sync(&mdsc->metric.delayed_work); /* cancel timer */
 	if (mdsc->mdsmap)
 		ceph_mdsmap_destroy(mdsc->mdsmap);
 	kfree(mdsc->sessions);
@@ -4824,6 +4826,7 @@ void ceph_mdsc_handle_mdsmap(struct ceph_mds_client *mdsc, struct ceph_msg *msg)
 
 	mutex_unlock(&mdsc->mutex);
 	schedule_delayed(mdsc);
+	metric_schedule_delayed(&mdsc->metric);
 	return;
 
 bad_unlock:

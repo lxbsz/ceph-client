@@ -27,6 +27,9 @@
 #include <linux/ceph/auth.h>
 #include <linux/ceph/debugfs.h>
 
+static DEFINE_MUTEX(ceph_fsc_lock);
+static LIST_HEAD(ceph_fsc_list);
+
 /*
  * Ceph superblock operations
  *
@@ -691,6 +694,10 @@ static struct ceph_fs_client *create_fs_client(struct ceph_mount_options *fsopt,
 	if (!fsc->wb_pagevec_pool)
 		goto fail_cap_wq;
 
+	mutex_lock(&ceph_fsc_lock);
+	list_add_tail(&fsc->list, &ceph_fsc_list);
+	mutex_unlock(&ceph_fsc_lock);
+
 	return fsc;
 
 fail_cap_wq:
@@ -716,6 +723,10 @@ static void flush_fs_workqueues(struct ceph_fs_client *fsc)
 static void destroy_fs_client(struct ceph_fs_client *fsc)
 {
 	dout("destroy_fs_client %p\n", fsc);
+
+	mutex_lock(&ceph_fsc_lock);
+	list_del(&fsc->list);
+	mutex_unlock(&ceph_fsc_lock);
 
 	ceph_mdsc_destroy(fsc);
 	destroy_workqueue(fsc->inode_wq);
@@ -1281,6 +1292,44 @@ static void __exit exit_ceph(void)
 	unregister_filesystem(&ceph_fs_type);
 	destroy_caches();
 }
+
+static int param_set_metric_interval(const char *val, const struct kernel_param *kp)
+{
+	struct ceph_fs_client *fsc;
+	unsigned int interval;
+	int ret;
+
+	ret = kstrtouint(val, 0, &interval);
+	if (ret < 0) {
+		pr_err("Failed to parse metric interval '%s'\n", val);
+		return ret;
+	}
+
+	if (interval > 5) {
+		pr_err("Invalid metric interval %u\n", interval);
+		return -EINVAL;
+	}
+
+	metric_send_interval = interval;
+
+	// wake up all the mds clients
+	mutex_lock(&ceph_fsc_lock);
+	list_for_each_entry(fsc, &ceph_fsc_list, list) {
+		metric_schedule_delayed(&fsc->mdsc->metric);
+	}
+	mutex_unlock(&ceph_fsc_lock);
+
+	return 0;
+}
+
+static const struct kernel_param_ops param_ops_metric_interval = {
+	.set = param_set_metric_interval,
+	.get = param_get_uint,
+};
+
+unsigned int metric_send_interval = 1;
+module_param_cb(metric_send_interval, &param_ops_metric_interval, &metric_send_interval, 0644);
+MODULE_PARM_DESC(metric_send_interval, "Interval (in seconds) of sending perf metric to ceph cluster, valid values are 0~5, 0 means disabled (default: 1)");
 
 module_init(init_ceph);
 module_exit(exit_ceph);
