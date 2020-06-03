@@ -754,6 +754,7 @@ static struct ceph_mds_session *register_session(struct ceph_mds_client *mdsc,
 	s->s_cap_iterator = NULL;
 	INIT_LIST_HEAD(&s->s_cap_releases);
 	INIT_WORK(&s->s_cap_release_work, ceph_cap_release_work);
+	INIT_DELAYED_WORK(&s->metric_delayed_work, ceph_metric_delayed_work);
 
 	INIT_LIST_HEAD(&s->s_cap_dirty);
 	INIT_LIST_HEAD(&s->s_cap_flushing);
@@ -1801,6 +1802,20 @@ static int request_close_session(struct ceph_mds_client *mdsc,
 	return 1;
 }
 
+static void try_reset_metric_work(struct ceph_mds_client *mdsc,
+				  struct ceph_mds_session *session)
+{
+	mutex_lock(&mdsc->mutex);
+	if (mdsc->metric.mds == session->s_mds) {
+		mdsc->metric.mds = -1;
+		cancel_delayed_work_sync(&session->metric_delayed_work);
+
+		/* Choose a new session to run the metric work */
+		ceph_choose_new_metric_session(mdsc);
+	}
+	mutex_unlock(&mdsc->mutex);
+}
+
 /*
  * Called with s_mutex held.
  */
@@ -1810,6 +1825,9 @@ static int __close_session(struct ceph_mds_client *mdsc,
 	if (session->s_state >= CEPH_MDS_SESSION_CLOSING)
 		return 0;
 	session->s_state = CEPH_MDS_SESSION_CLOSING;
+
+	try_reset_metric_work(mdsc, session);
+
 	return request_close_session(mdsc, session);
 }
 
@@ -3312,6 +3330,15 @@ static void handle_session(struct ceph_mds_session *session,
 		session->s_features = features;
 		renewed_caps(mdsc, session, 0);
 		wake = 1;
+
+		mutex_lock(&mdsc->mutex);
+		if (mdsc->metric.mds < 0 &&
+		    test_bit(CEPHFS_FEATURE_METRIC_COLLECT, &session->s_features)) {
+			ceph_metric_schedule_delayed(session);
+			mdsc->metric.mds = session->s_mds;
+		}
+		mutex_unlock(&mdsc->mutex);
+
 		if (mdsc->stopping)
 			__close_session(mdsc, session);
 		break;
@@ -3805,6 +3832,8 @@ static void send_mds_reconnect(struct ceph_mds_client *mdsc,
 		goto fail_nomsg;
 
 	xa_destroy(&session->s_delegated_inos);
+
+	try_reset_metric_work(mdsc, session);
 
 	mutex_lock(&session->s_mutex);
 	session->s_state = CEPH_MDS_SESSION_RECONNECTING;
