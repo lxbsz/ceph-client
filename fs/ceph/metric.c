@@ -127,6 +127,14 @@ static void metric_delayed_work(struct work_struct *work)
 			continue;
 		}
 
+		/*
+		 * Skip it if MDS doesn't support the metric collection,
+		 * or the MDS will close the session's socket connection
+		 * directly when it get this message.
+		 */
+		if (!test_bit(CEPHFS_FEATURE_METRIC_COLLECT, &s->s_features))
+			continue;
+
 		/* Only send the metric once in any available session */
 		ret = ceph_mdsc_send_metrics(mdsc, s, nr_caps);
 		ceph_put_mds_session(s);
