@@ -104,7 +104,7 @@ static void metric_delayed_work(struct work_struct *work)
 		container_of(work, struct ceph_client_metric, delayed_work.work);
 	struct ceph_mds_client *mdsc =
 		container_of(m, struct ceph_mds_client, metric);
-	struct ceph_mds_session *s;
+	struct ceph_mds_session *s, *metric_session = NULL;
 	u64 nr_caps = 0;
 	bool ret;
 	int i;
@@ -114,16 +114,13 @@ static void metric_delayed_work(struct work_struct *work)
 		s = __ceph_lookup_mds_session(mdsc, i);
 		if (!s)
 			continue;
-		nr_caps += s->s_nr_caps;
-		ceph_put_mds_session(s);
-	}
 
-	for (i = 0; i < mdsc->max_sessions; i++) {
-		s = __ceph_lookup_mds_session(mdsc, i);
-		if (!s)
-			continue;
+		nr_caps += s->s_nr_caps;
+
 		if (!check_session_state(mdsc, s)) {
 			ceph_put_mds_session(s);
+			if (m->mds == i)
+				m->mds = -1;
 			continue;
 		}
 
@@ -132,18 +129,27 @@ static void metric_delayed_work(struct work_struct *work)
 		 * or the MDS will close the session's socket connection
 		 * directly when it get this message.
 		 */
-		if (!test_bit(CEPHFS_FEATURE_METRIC_COLLECT, &s->s_features))
-			continue;
-
-		/* Only send the metric once in any available session */
-		ret = ceph_mdsc_send_metrics(mdsc, s, nr_caps);
-		ceph_put_mds_session(s);
-		if (ret)
-			break;
+		if (m->mds == -1 &&
+		    test_bit(CEPHFS_FEATURE_METRIC_COLLECT, &s->s_features)) {
+			metric_session = s;
+			m->mds = i;
+		} else if (m->mds == i) {
+			metric_session = s;
+		} else {
+			ceph_put_mds_session(s);
+		}
 	}
 	mutex_unlock(&mdsc->mutex);
 
-	metric_schedule_delayed(&mdsc->metric);
+	/* Only send the metric once in any available session */
+	if (metric_session) {
+		ret = ceph_mdsc_send_metrics(mdsc, metric_session, nr_caps);
+		ceph_put_mds_session(metric_session);
+	}
+
+	/* if no mds support metric collection, will stop the work */
+	if (atomic_read(&m->mds_cnt))
+		metric_schedule_delayed(m);
 }
 
 int ceph_metric_init(struct ceph_client_metric *m)
@@ -191,6 +197,8 @@ int ceph_metric_init(struct ceph_client_metric *m)
 	m->total_metadatas = 0;
 	m->metadata_latency_sum = 0;
 
+	m->mds = -1;
+	atomic_set(&m->mds_cnt, 0);
 	INIT_DELAYED_WORK(&m->delayed_work, metric_delayed_work);
 
 	return 0;

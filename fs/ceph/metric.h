@@ -114,6 +114,8 @@ struct ceph_client_metric {
 	ktime_t metadata_latency_min;
 	ktime_t metadata_latency_max;
 
+	atomic_t mds_cnt;  /* how many mds support metric collection */
+	int mds; /* which mds will send the metrics to */
 	struct delayed_work delayed_work;  /* delayed work */
 };
 
