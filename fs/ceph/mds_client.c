@@ -1809,6 +1809,11 @@ static int __close_session(struct ceph_mds_client *mdsc,
 	if (session->s_state >= CEPH_MDS_SESSION_CLOSING)
 		return 0;
 	session->s_state = CEPH_MDS_SESSION_CLOSING;
+
+	if (test_bit(CEPHFS_FEATURE_METRIC_COLLECT, &session->s_features)
+	    && atomic_dec_return(&mdsc->metric.mds_cnt) == 0)
+		cancel_delayed_work_sync(&mdsc->metric.delayed_work);
+
 	return request_close_session(session);
 }
 
@@ -3310,6 +3315,9 @@ static void handle_session(struct ceph_mds_session *session,
 		session->s_state = CEPH_MDS_SESSION_OPEN;
 		session->s_features = features;
 		renewed_caps(mdsc, session, 0);
+		if (test_bit(CEPHFS_FEATURE_METRIC_COLLECT, &session->s_features)
+		    && atomic_inc_return(&mdsc->metric.mds_cnt) == 1)
+			metric_schedule_delayed(&mdsc->metric);
 		wake = 1;
 		if (mdsc->stopping)
 			__close_session(mdsc, session);
@@ -3808,6 +3816,10 @@ static void send_mds_reconnect(struct ceph_mds_client *mdsc,
 	mutex_lock(&session->s_mutex);
 	session->s_state = CEPH_MDS_SESSION_RECONNECTING;
 	session->s_seq = 0;
+
+	if (test_bit(CEPHFS_FEATURE_METRIC_COLLECT, &session->s_features)
+	    && atomic_dec_return(&mdsc->metric.mds_cnt) == 0)
+		cancel_delayed_work_sync(&mdsc->metric.delayed_work);
 
 	dout("session %p state %s\n", session,
 	     ceph_session_state_name(session->s_state));
