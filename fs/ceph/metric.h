@@ -115,6 +115,11 @@ struct ceph_client_metric {
 	ktime_t metadata_latency_min;
 	ktime_t metadata_latency_max;
 
+        atomic64_t dirs_opening;
+        atomic64_t dirs_opened;
+        atomic64_t files_opening;
+        atomic64_t files_opened;
+
 	struct ceph_mds_session *session;
 	struct delayed_work delayed_work;  /* delayed work */
 };

@@ -192,6 +192,11 @@ int ceph_metric_init(struct ceph_client_metric *m)
 	m->total_metadatas = 0;
 	m->metadata_latency_sum = 0;
 
+        atomic64_set(&m->dirs_opening, 0);
+        atomic64_set(&m->dirs_opened, 0);
+        atomic64_set(&m->files_opening, 0);
+        atomic64_set(&m->files_opened, 0);
+
 	m->session = NULL;
 	INIT_DELAYED_WORK(&m->delayed_work, metric_delayed_work);
 

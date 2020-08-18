@@ -205,6 +205,8 @@ static int ceph_init_file_info(struct inode *inode, struct file *file,
 					int fmode, bool isdir)
 {
 	struct ceph_inode_info *ci = ceph_inode(inode);
+	struct ceph_fs_client *fsc = ceph_sb_to_client(inode->i_sb);
+	struct ceph_mds_client *mdsc = fsc->mdsc;
 	struct ceph_file_info *fi;
 
 	dout("%s %p %p 0%o (%s)\n", __func__, inode, file,
@@ -212,20 +214,25 @@ static int ceph_init_file_info(struct inode *inode, struct file *file,
 	BUG_ON(inode->i_fop->release != ceph_release);
 
 	if (isdir) {
-		struct ceph_dir_file_info *dfi =
-			kmem_cache_zalloc(ceph_dir_file_cachep, GFP_KERNEL);
+		struct ceph_dir_file_info *dfi;
+
+		atomic64_dec(&mdsc->metric.dirs_opening);
+		dfi = kmem_cache_zalloc(ceph_dir_file_cachep, GFP_KERNEL);
 		if (!dfi)
 			return -ENOMEM;
 
+		atomic64_inc(&mdsc->metric.dirs_opened);
 		file->private_data = dfi;
 		fi = &dfi->file_info;
 		dfi->next_offset = 2;
 		dfi->readdir_cache_idx = -1;
 	} else {
+		atomic64_dec(&mdsc->metric.files_opening);
 		fi = kmem_cache_zalloc(ceph_file_cachep, GFP_KERNEL);
 		if (!fi)
 			return -ENOMEM;
 
+		atomic64_inc(&mdsc->metric.files_opened);
 		file->private_data = fi;
 	}
 
@@ -371,6 +378,11 @@ int ceph_open(struct inode *inode, struct file *file)
 		return ceph_init_file(inode, file, fmode);
 	}
 
+	if (S_ISDIR(inode->i_mode))
+		atomic64_inc(&mdsc->metric.dirs_opening);
+	else
+		atomic64_inc(&mdsc->metric.files_opening);
+
 	/*
 	 * No need to block if we have caps on the auth MDS (for
 	 * write) or any MDS (for read).  Update wanted set
@@ -408,6 +420,8 @@ int ceph_open(struct inode *inode, struct file *file)
 	req = prepare_open_request(inode->i_sb, flags, 0);
 	if (IS_ERR(req)) {
 		err = PTR_ERR(req);
+		atomic64_dec(&mdsc->metric.dirs_opening);
+		atomic64_dec(&mdsc->metric.files_opening);
 		goto out;
 	}
 	req->r_inode = inode;
