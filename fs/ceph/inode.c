@@ -426,6 +426,7 @@ out_unlock:
  */
 struct inode *ceph_alloc_inode(struct super_block *sb)
 {
+	struct ceph_mds_client *mdsc = ceph_sb_to_mdsc(sb);
 	struct ceph_inode_info *ci;
 	int i;
 
@@ -485,6 +486,7 @@ struct inode *ceph_alloc_inode(struct super_block *sb)
 	ci->i_last_rd = ci->i_last_wr = jiffies - 3600 * HZ;
 	for (i = 0; i < CEPH_FILE_MODE_BITS; i++)
 		ci->i_nr_by_mode[i] = 0;
+	ci->is_opened = false;
 
 	mutex_init(&ci->i_truncate_mutex);
 	ci->i_truncate_seq = 0;
@@ -525,6 +527,8 @@ struct inode *ceph_alloc_inode(struct super_block *sb)
 
 	ci->i_meta_err = 0;
 
+	percpu_counter_inc(&mdsc->metric.total_inodes);
+
 	return &ci->vfs_inode;
 }
 
@@ -539,6 +543,7 @@ void ceph_free_inode(struct inode *inode)
 void ceph_evict_inode(struct inode *inode)
 {
 	struct ceph_inode_info *ci = ceph_inode(inode);
+	struct ceph_mds_client *mdsc = ceph_inode_to_mdsc(inode);
 	struct ceph_inode_frag *frag;
 	struct rb_node *n;
 
@@ -592,6 +597,8 @@ void ceph_evict_inode(struct inode *inode)
 
 	ceph_put_string(rcu_dereference_raw(ci->i_layout.pool_ns));
 	ceph_put_string(rcu_dereference_raw(ci->i_cached_layout.pool_ns));
+
+	percpu_counter_dec(&mdsc->metric.total_inodes);
 }
 
 static inline blkcnt_t calc_inode_blocks(u64 size)

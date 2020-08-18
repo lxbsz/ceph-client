@@ -211,8 +211,9 @@ static int ceph_init_file_info(struct inode *inode, struct file *file,
 	BUG_ON(inode->i_fop->release != ceph_release);
 
 	if (isdir) {
-		struct ceph_dir_file_info *dfi =
-			kmem_cache_zalloc(ceph_dir_file_cachep, GFP_KERNEL);
+		struct ceph_dir_file_info *dfi;
+
+		dfi = kmem_cache_zalloc(ceph_dir_file_cachep, GFP_KERNEL);
 		if (!dfi)
 			return -ENOMEM;
 

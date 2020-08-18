@@ -4283,12 +4283,22 @@ void __ceph_touch_fmode(struct ceph_inode_info *ci,
 
 void ceph_get_fmode(struct ceph_inode_info *ci, int fmode, int count)
 {
-	int i;
+	struct ceph_mds_client *mdsc = ceph_ci_to_mdsc(ci);
 	int bits = (fmode << 1) | 1;
+	int i;
+
+	if (count == 1)
+		atomic64_inc(&mdsc->metric.opened_files);
+
 	spin_lock(&ci->i_ceph_lock);
 	for (i = 0; i < CEPH_FILE_MODE_BITS; i++) {
 		if (bits & (1 << i))
 			ci->i_nr_by_mode[i] += count;
+	}
+
+	if (!ci->is_opened && fmode) {
+		ci->is_opened = true;
+		percpu_counter_inc(&mdsc->metric.opened_inodes);
 	}
 	spin_unlock(&ci->i_ceph_lock);
 }
@@ -4300,14 +4310,27 @@ void ceph_get_fmode(struct ceph_inode_info *ci, int fmode, int count)
  */
 void ceph_put_fmode(struct ceph_inode_info *ci, int fmode, int count)
 {
-	int i;
+	struct ceph_mds_client *mdsc = ceph_ci_to_mdsc(ci);
 	int bits = (fmode << 1) | 1;
+	bool empty = true;
+	int i;
+
+	if (count == 1)
+		atomic64_dec(&mdsc->metric.opened_files);
+
 	spin_lock(&ci->i_ceph_lock);
 	for (i = 0; i < CEPH_FILE_MODE_BITS; i++) {
 		if (bits & (1 << i)) {
 			BUG_ON(ci->i_nr_by_mode[i] < count);
 			ci->i_nr_by_mode[i] -= count;
+			if (ci->i_nr_by_mode[i] && i) /* Skip the pin ref */
+				empty = false;
 		}
+	}
+
+	if (ci->is_opened && empty && fmode) {
+		ci->is_opened = false;
+		percpu_counter_dec(&mdsc->metric.opened_inodes);
 	}
 	spin_unlock(&ci->i_ceph_lock);
 }

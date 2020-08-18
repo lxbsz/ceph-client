@@ -387,6 +387,7 @@ struct ceph_inode_info {
 	unsigned long i_last_rd;
 	unsigned long i_last_wr;
 	int i_nr_by_mode[CEPH_FILE_MODE_BITS];  /* open file counts */
+	bool is_opened; /* has opened files or directors */
 
 	struct mutex i_truncate_mutex;
 	u32 i_truncate_seq;        /* last truncate to smaller size */
