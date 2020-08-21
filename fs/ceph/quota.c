@@ -12,7 +12,7 @@
 
 void ceph_adjust_quota_realms_count(struct inode *inode, bool inc)
 {
-	struct ceph_mds_client *mdsc = ceph_inode_to_client(inode)->mdsc;
+	struct ceph_mds_client *mdsc = ceph_inode_to_mdsc(inode);
 	if (inc)
 		atomic64_inc(&mdsc->quotarealms_count);
 	else
@@ -21,7 +21,7 @@ void ceph_adjust_quota_realms_count(struct inode *inode, bool inc)
 
 static inline bool ceph_has_realms_with_quotas(struct inode *inode)
 {
-	struct ceph_mds_client *mdsc = ceph_inode_to_client(inode)->mdsc;
+	struct ceph_mds_client *mdsc = ceph_inode_to_mdsc(inode);
 	struct super_block *sb = mdsc->fsc->sb;
 
 	if (atomic64_read(&mdsc->quotarealms_count) > 0)
@@ -266,7 +266,7 @@ restart:
 
 static bool ceph_quota_is_same_realm(struct inode *old, struct inode *new)
 {
-	struct ceph_mds_client *mdsc = ceph_inode_to_client(old)->mdsc;
+	struct ceph_mds_client *mdsc = ceph_inode_to_mdsc(old);
 	struct ceph_snap_realm *old_realm, *new_realm;
 	bool is_same;
 
@@ -313,7 +313,7 @@ enum quota_check_op {
 static bool check_quota_exceeded(struct inode *inode, enum quota_check_op op,
 				 loff_t delta)
 {
-	struct ceph_mds_client *mdsc = ceph_inode_to_client(inode)->mdsc;
+	struct ceph_mds_client *mdsc = ceph_inode_to_mdsc(inode);
 	struct ceph_inode_info *ci;
 	struct ceph_snap_realm *realm, *next;
 	struct inode *in;

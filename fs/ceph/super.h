@@ -451,6 +451,30 @@ ceph_sb_to_client(const struct super_block *sb)
 	return (struct ceph_fs_client *)sb->s_fs_info;
 }
 
+static inline struct ceph_fs_client *
+ceph_ci_to_client(const struct ceph_inode_info *ci)
+{
+	return (struct ceph_fs_client *)ci->vfs_inode.i_sb->s_fs_info;
+}
+
+static inline struct ceph_mds_client *
+ceph_inode_to_mdsc(const struct inode *inode)
+{
+	return (struct ceph_mds_client *)ceph_inode_to_client(inode)->mdsc;
+}
+
+static inline struct ceph_mds_client *
+ceph_sb_to_mdsc(const struct super_block *sb)
+{
+	return (struct ceph_mds_client *)ceph_sb_to_client(sb)->mdsc;
+}
+
+static inline struct ceph_mds_client *
+ceph_ci_to_mdsc(const struct ceph_inode_info *ci)
+{
+	return (struct ceph_mds_client *)ceph_ci_to_client(ci)->mdsc;
+}
+
 static inline struct ceph_vino
 ceph_vino(const struct inode *inode)
 {
