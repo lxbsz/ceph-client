@@ -4237,7 +4237,7 @@ static void handle_lease(struct ceph_mds_client *mdsc,
 	     dname.len, dname.name);
 
 	mutex_lock(&session->s_mutex);
-	session->s_seq++;
+	inc_session_sequence(session);
 
 	if (!inode) {
 		dout("handle_lease no inode %llx\n", vino.ino);
@@ -4384,14 +4384,25 @@ static void maybe_recover_session(struct ceph_mds_client *mdsc)
 	ceph_force_reconnect(fsc->sb);
 }
 
+static bool check_session_closing(struct ceph_mds_session *s)
+{
+	int ret;
+
+	if (s->s_state != CEPH_MDS_SESSION_CLOSING)
+		return true;
+
+	dout("resending session close request for mds%d\n", s->s_mds);
+	ret = request_close_session(s);
+	if (ret < 0)
+		pr_err("ceph: Unable to close session to mds %d: %d\n", s->s_mds, ret);
+	return false;
+}
+
 bool check_session_state(struct ceph_mds_session *s)
 {
-	if (s->s_state == CEPH_MDS_SESSION_CLOSING) {
-		dout("resending session close request for mds%d\n",
-				s->s_mds);
-		request_close_session(s);
+	if (!check_session_closing(s))
 		return false;
-	}
+
 	if (s->s_ttl && time_after(jiffies, s->s_ttl)) {
 		if (s->s_state == CEPH_MDS_SESSION_OPEN) {
 			s->s_state = CEPH_MDS_SESSION_HUNG;
@@ -4406,6 +4417,18 @@ bool check_session_state(struct ceph_mds_session *s)
 		return false;
 
 	return true;
+}
+
+/*
+ * If the sequence is incremented while we're waiting on a REQUEST_CLOSE reply,
+ * then we need to retransmit that request.
+ */
+void inc_session_sequence(struct ceph_mds_session *s)
+{
+	lockdep_assert_held(&s->s_mutex);
+
+	s->s_seq++;
+	check_session_closing(s);
 }
 
 /*
