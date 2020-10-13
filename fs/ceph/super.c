@@ -159,6 +159,7 @@ enum {
 	Opt_quotadf,
 	Opt_copyfrom,
 	Opt_wsync,
+	Opt_sharesb,
 };
 
 enum ceph_recover_session_mode {
@@ -199,6 +200,7 @@ static const struct fs_parameter_spec ceph_mount_parameters[] = {
 	fsparam_string	("source",			Opt_source),
 	fsparam_u32	("wsize",			Opt_wsize),
 	fsparam_flag_no	("wsync",			Opt_wsync),
+	fsparam_flag_no	("sharesb",			Opt_sharesb),
 	{}
 };
 
@@ -454,6 +456,12 @@ static int ceph_parse_mount_param(struct fs_context *fc,
 			fsopt->flags &= ~CEPH_MOUNT_OPT_ASYNC_DIROPS;
 		else
 			fsopt->flags |= CEPH_MOUNT_OPT_ASYNC_DIROPS;
+		break;
+	case Opt_sharesb:
+		if (!result.negated)
+			fsopt->flags &= ~CEPH_MOUNT_OPT_NO_SHARE_SB;
+		else
+			fsopt->flags |= CEPH_MOUNT_OPT_NO_SHARE_SB;
 		break;
 	default:
 		BUG();
@@ -1006,6 +1014,10 @@ static int ceph_compare_super(struct super_block *sb, struct fs_context *fc)
 	struct ceph_fs_client *other = ceph_sb_to_client(sb);
 
 	dout("ceph_compare_super %p\n", sb);
+
+	if (fsopt->flags & CEPH_MOUNT_OPT_NO_SHARE_SB ||
+	    other->mount_options->flags & CEPH_MOUNT_OPT_NO_SHARE_SB)
+		return 0;
 
 	if (compare_mount_options(fsopt, opt, other)) {
 		dout("monitor(s)/mount options don't match\n");
