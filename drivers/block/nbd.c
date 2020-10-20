@@ -1327,9 +1327,10 @@ static int nbd_start_device_ioctl(struct nbd_device *nbd, struct block_device *b
 					 atomic_read(&config->recv_threads) == 0);
 	if (ret)
 		sock_shutdown(nbd);
-	flush_workqueue(nbd->recv_workq);
 
 	mutex_lock(&nbd->config_lock);
+	flush_workqueue(nbd->recv_workq);
+
 	nbd_bdev_reset(bdev);
 	/* user requested, ignore socket errors */
 	if (test_bit(NBD_RT_DISCONNECT_REQUESTED, &config->runtime_flags))
@@ -1337,6 +1338,18 @@ static int nbd_start_device_ioctl(struct nbd_device *nbd, struct block_device *b
 	if (test_bit(NBD_RT_TIMEDOUT, &config->runtime_flags))
 		ret = -ETIMEDOUT;
 	return ret;
+}
+
+static void nbd_config_clear_rt_ref_and_put(struct nbd_device *nbd)
+{
+	lockdep_assert_held(&nbd->config_lock);
+
+	if (test_and_clear_bit(NBD_RT_HAS_CONFIG_REF,
+			       &nbd->config->runtime_flags)) {
+		mutex_unlock(&nbd->config_lock);
+		nbd_config_put(nbd);
+		mutex_lock(&nbd->config_lock);
+	}
 }
 
 static void nbd_clear_sock_ioctl(struct nbd_device *nbd,
@@ -2006,16 +2019,15 @@ static void nbd_disconnect_and_put(struct nbd_device *nbd)
 	mutex_lock(&nbd->config_lock);
 	nbd_disconnect(nbd);
 	nbd_clear_sock(nbd);
-	mutex_unlock(&nbd->config_lock);
+
 	/*
 	 * Make sure recv thread has finished, so it does not drop the last
 	 * config ref and try to destroy the workqueue from inside the work
 	 * queue.
 	 */
 	flush_workqueue(nbd->recv_workq);
-	if (test_and_clear_bit(NBD_RT_HAS_CONFIG_REF,
-			       &nbd->config->runtime_flags))
-		nbd_config_put(nbd);
+	nbd_config_clear_rt_ref_and_put(nbd);
+	mutex_unlock(&nbd->config_lock);
 }
 
 static int nbd_genl_disconnect(struct sk_buff *skb, struct genl_info *info)
