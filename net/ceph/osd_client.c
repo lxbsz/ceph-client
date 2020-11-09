@@ -2273,6 +2273,8 @@ static void encode_request_finish(struct ceph_msg *msg)
 static void send_request(struct ceph_osd_request *req)
 {
 	struct ceph_osd *osd = req->r_osd;
+	struct ceph_osd_client *osdc = req->r_osdc;
+	struct ceph_osd_req_op *op;
 
 	verify_osd_locked(osd);
 	WARN_ON(osd->o_osd != req->r_t.osd);
@@ -2309,6 +2311,10 @@ static void send_request(struct ceph_osd_request *req)
 	req->r_sent = osd->o_incarnation;
 	req->r_request->hdr.tid = cpu_to_le64(req->r_tid);
 	ceph_con_send(&osd->o_con, ceph_msg_get(req->r_request));
+
+	percpu_counter_inc(&osdc->metric.op_send);
+	for (op = req->r_ops; op != &req->r_ops[req->r_num_ops]; op++)
+		percpu_counter_add(&osdc->metric.op_send_bytes, op->indata_len);
 }
 
 static void maybe_request_map(struct ceph_osd_client *osdc)
@@ -2424,6 +2430,61 @@ promote:
 	goto again;
 }
 
+static void osd_acount_op_metric(struct ceph_osd_request *req)
+{
+	struct ceph_osd_metric *m = &req->r_osdc->metric;
+	struct ceph_osd_req_op *op;
+	struct percpu_counter *counter;
+
+	percpu_counter_inc(&m->op_ops);
+	percpu_counter_add(&m->op_oplen_avg, req->r_num_ops);
+
+	if ((req->r_flags & (CEPH_OSD_FLAG_READ | CEPH_OSD_FLAG_READ))
+	    == (CEPH_OSD_FLAG_READ | CEPH_OSD_FLAG_READ))
+		percpu_counter_inc(&m->op_rmw);
+	if (req->r_flags & CEPH_OSD_FLAG_READ)
+		percpu_counter_inc(&m->op_r);
+	else if (req->r_flags & CEPH_OSD_FLAG_WRITE)
+		percpu_counter_inc(&m->op_w);
+
+	for (op = req->r_ops; op != &req->r_ops[req->r_num_ops]; op++) {
+		counter = NULL;
+
+		switch (op->op) {
+		case CEPH_OSD_OP_STAT:
+			counter = &m->op_stat;
+			break;
+		case CEPH_OSD_OP_CREATE:
+			counter = &m->op_create;
+			break;
+		case CEPH_OSD_OP_READ:
+			counter = &m->op_read;
+			break;
+		case CEPH_OSD_OP_WRITE:
+			counter = &m->op_write;
+			break;
+		case CEPH_OSD_OP_WRITEFULL:
+			counter = &m->op_writefull;
+			break;
+		case CEPH_OSD_OP_APPEND:
+			counter = &m->op_append;
+			break;
+		case CEPH_OSD_OP_ZERO:
+			counter = &m->op_zero;
+			break;
+		case CEPH_OSD_OP_TRUNCATE:
+			counter = &m->op_truncate;
+			break;
+		case CEPH_OSD_OP_DELETE:
+			counter = &m->op_delete;
+			break;
+		}
+
+		if (counter)
+			percpu_counter_inc(counter);
+	}
+}
+
 static void account_request(struct ceph_osd_request *req)
 {
 	WARN_ON(req->r_flags & (CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK));
@@ -2434,6 +2495,8 @@ static void account_request(struct ceph_osd_request *req)
 
 	req->r_start_stamp = jiffies;
 	req->r_start_latency = ktime_get();
+
+	osd_acount_op_metric(req);
 }
 
 static void submit_request(struct ceph_osd_request *req, bool wrlocked)
@@ -3768,6 +3831,7 @@ static void handle_reply(struct ceph_osd *osd, struct ceph_msg *msg)
 	mutex_unlock(&osd->lock);
 	up_read(&osdc->lock);
 
+	percpu_counter_inc(&osdc->metric.op_reply);
 	__complete_request(req);
 	return;
 
@@ -4008,8 +4072,10 @@ static void kick_requests(struct ceph_osd_client *osdc,
 		osd = lookup_create_osd(osdc, req->r_t.osd, true);
 		link_request(osd, req);
 		if (!req->r_linger) {
-			if (!osd_homeless(osd) && !req->r_t.paused)
+			if (!osd_homeless(osd) && !req->r_t.paused) {
 				send_request(req);
+				percpu_counter_inc(&req->r_osdc->metric.op_resend);
+			}
 		} else {
 			cancel_linger_request(req);
 		}
@@ -4156,8 +4222,10 @@ static void kick_osd_requests(struct ceph_osd *osd)
 		n = rb_next(n); /* cancel_linger_request() */
 
 		if (!req->r_linger) {
-			if (!req->r_t.paused)
+			if (!req->r_t.paused) {
 				send_request(req);
+				percpu_counter_inc(&req->r_osdc->metric.op_resend);
+			}
 		} else {
 			cancel_linger_request(req);
 		}
@@ -5205,6 +5273,71 @@ void ceph_osdc_reopen_osds(struct ceph_osd_client *osdc)
 	up_write(&osdc->lock);
 }
 
+static void ceph_metric_destroy(struct ceph_osd_metric *m)
+{
+	percpu_counter_destroy(&m->op_ops);
+	percpu_counter_destroy(&m->op_oplen_avg);
+	percpu_counter_destroy(&m->op_send);
+	percpu_counter_destroy(&m->op_send_bytes);
+	percpu_counter_destroy(&m->op_resend);
+	percpu_counter_destroy(&m->op_reply);
+
+	percpu_counter_destroy(&m->op_rmw);
+	percpu_counter_destroy(&m->op_r);
+	percpu_counter_destroy(&m->op_w);
+
+	percpu_counter_destroy(&m->op_stat);
+	percpu_counter_destroy(&m->op_create);
+	percpu_counter_destroy(&m->op_read);
+	percpu_counter_destroy(&m->op_write);
+	percpu_counter_destroy(&m->op_writefull);
+	percpu_counter_destroy(&m->op_append);
+	percpu_counter_destroy(&m->op_zero);
+	percpu_counter_destroy(&m->op_truncate);
+	percpu_counter_destroy(&m->op_delete);
+}
+
+#define CEPH_PERCPU_COUNTER_INIT(counter)			\
+do {								\
+	ret = percpu_counter_init(&m->counter, 0, GFP_NOIO);	\
+	if (ret)						\
+		goto err_op_fail;				\
+} while (0)
+
+static int ceph_metric_init(struct ceph_osd_metric *m)
+{
+	int ret;
+
+	memset(m, 0, sizeof(*m));
+
+	CEPH_PERCPU_COUNTER_INIT(op_ops);
+	CEPH_PERCPU_COUNTER_INIT(op_oplen_avg);
+	CEPH_PERCPU_COUNTER_INIT(op_send);
+	CEPH_PERCPU_COUNTER_INIT(op_send_bytes);
+	CEPH_PERCPU_COUNTER_INIT(op_resend);
+	CEPH_PERCPU_COUNTER_INIT(op_reply);
+
+	CEPH_PERCPU_COUNTER_INIT(op_rmw);
+	CEPH_PERCPU_COUNTER_INIT(op_r);
+	CEPH_PERCPU_COUNTER_INIT(op_w);
+
+	CEPH_PERCPU_COUNTER_INIT(op_stat);
+	CEPH_PERCPU_COUNTER_INIT(op_create);
+	CEPH_PERCPU_COUNTER_INIT(op_read);
+	CEPH_PERCPU_COUNTER_INIT(op_write);
+	CEPH_PERCPU_COUNTER_INIT(op_writefull);
+	CEPH_PERCPU_COUNTER_INIT(op_append);
+	CEPH_PERCPU_COUNTER_INIT(op_zero);
+	CEPH_PERCPU_COUNTER_INIT(op_truncate);
+	CEPH_PERCPU_COUNTER_INIT(op_delete);
+
+	return 0;
+
+err_op_fail:
+	ceph_metric_destroy(m);
+	return ret;
+}
+
 /*
  * init, shutdown
  */
@@ -5257,6 +5390,9 @@ int ceph_osdc_init(struct ceph_osd_client *osdc, struct ceph_client *client)
 	if (!osdc->completion_wq)
 		goto out_notify_wq;
 
+	if (ceph_metric_init(&osdc->metric) < 0)
+		goto out_completion_wq;
+
 	schedule_delayed_work(&osdc->timeout_work,
 			      osdc->client->options->osd_keepalive_timeout);
 	schedule_delayed_work(&osdc->osds_timeout_work,
@@ -5264,6 +5400,8 @@ int ceph_osdc_init(struct ceph_osd_client *osdc, struct ceph_client *client)
 
 	return 0;
 
+out_completion_wq:
+	destroy_workqueue(osdc->completion_wq);
 out_notify_wq:
 	destroy_workqueue(osdc->notify_wq);
 out_msgpool_reply:
@@ -5302,6 +5440,7 @@ void ceph_osdc_stop(struct ceph_osd_client *osdc)
 	WARN_ON(atomic_read(&osdc->num_requests));
 	WARN_ON(atomic_read(&osdc->num_homeless));
 
+	ceph_metric_destroy(&osdc->metric);
 	ceph_osdmap_destroy(osdc->osdmap);
 	mempool_destroy(osdc->req_mempool);
 	ceph_msgpool_destroy(&osdc->msgpool_op);

@@ -339,6 +339,29 @@ struct ceph_osd_backoff {
 	struct ceph_hobject_id *end;
 };
 
+struct ceph_osd_metric {
+	struct percpu_counter op_ops;
+	struct percpu_counter op_oplen_avg;
+	struct percpu_counter op_send;
+	struct percpu_counter op_send_bytes;
+	struct percpu_counter op_resend;
+	struct percpu_counter op_reply;
+
+	struct percpu_counter op_rmw;
+	struct percpu_counter op_r;
+	struct percpu_counter op_w;
+
+	struct percpu_counter op_stat;
+	struct percpu_counter op_create;
+	struct percpu_counter op_read;
+	struct percpu_counter op_write;
+	struct percpu_counter op_writefull;
+	struct percpu_counter op_append;
+	struct percpu_counter op_zero;
+	struct percpu_counter op_truncate;
+	struct percpu_counter op_delete;
+};
+
 #define CEPH_LINGER_ID_START	0xffff000000000000ULL
 
 struct ceph_osd_client {
@@ -370,6 +393,8 @@ struct ceph_osd_client {
 
 	struct ceph_msgpool	msgpool_op;
 	struct ceph_msgpool	msgpool_op_reply;
+
+	struct ceph_osd_metric  metric;
 
 	struct workqueue_struct	*notify_wq;
 	struct workqueue_struct	*completion_wq;
