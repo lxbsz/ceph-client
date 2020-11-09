@@ -339,6 +339,54 @@ static void dump_backoffs(struct seq_file *s, struct ceph_osd *osd)
 	mutex_unlock(&osd->lock);
 }
 
+static void dump_op_metric(struct seq_file *s, struct ceph_osd_client *osdc)
+{
+	struct ceph_osd_metric *m = &osdc->metric;
+
+	seq_printf(s, "  op_ops\t%d\n", atomic_read(&osdc->num_requests));
+	seq_printf(s, "  op_active\t%lld\n", percpu_counter_sum(&m->op_active));
+	seq_printf(s, "  op_oplen_avg\t%lld\n", percpu_counter_sum(&m->op_oplen_avg));
+	seq_printf(s, "  op_send\t%lld\n", percpu_counter_sum(&m->op_send));
+	seq_printf(s, "  op_send_bytes\t%lld\n", percpu_counter_sum(&m->op_send_bytes));
+	seq_printf(s, "  op_resend\t%lld\n", percpu_counter_sum(&m->op_resend));
+	seq_printf(s, "  op_reply\t%lld\n", percpu_counter_sum(&m->op_reply));
+
+	seq_printf(s, "  op_rmw\t%lld\n", percpu_counter_sum(&m->op_rmw));
+	seq_printf(s, "  op_r\t%lld\n", percpu_counter_sum(&m->op_r));
+	seq_printf(s, "  op_w\t%lld\n", percpu_counter_sum(&m->op_w));
+	seq_printf(s, "  op_pgop\t%lld\n", percpu_counter_sum(&m->op_pgop));
+
+	seq_printf(s, "  stat\t%lld\n", percpu_counter_sum(&m->op_stat));
+	seq_printf(s, "  create\t%lld\n", percpu_counter_sum(&m->op_create));
+	seq_printf(s, "  read\t%lld\n", percpu_counter_sum(&m->op_read));
+	seq_printf(s, "  write\t%lld\n", percpu_counter_sum(&m->op_write));
+	seq_printf(s, "  writefull\t%lld\n", percpu_counter_sum(&m->op_writefull));
+	seq_printf(s, "  append\t%lld\n", percpu_counter_sum(&m->op_append));
+	seq_printf(s, "  zero\t%lld\n", percpu_counter_sum(&m->op_zero));
+	seq_printf(s, "  truncate\t%lld\n", percpu_counter_sum(&m->op_truncate));
+	seq_printf(s, "  delete\t%lld\n", percpu_counter_sum(&m->op_delete));
+	seq_printf(s, "  mapext\t%lld\n", percpu_counter_sum(&m->op_mapext));
+	seq_printf(s, "  op_sparse_read\t%lld\n", percpu_counter_sum(&m->op_sparse_read));
+	seq_printf(s, "  op_clonerange\t%lld\n", percpu_counter_sum(&m->op_clonerange));
+	seq_printf(s, "  op_getxattr\t%lld\n", percpu_counter_sum(&m->op_getxattr));
+	seq_printf(s, "  op_setxattr\t%lld\n", percpu_counter_sum(&m->op_setxattr));
+	seq_printf(s, "  op_cmpxattr\t%lld\n", percpu_counter_sum(&m->op_cmpxattr));
+	seq_printf(s, "  op_rmxattr\t%lld\n", percpu_counter_sum(&m->op_rmxattr));
+	seq_printf(s, "  op_resetxattrs\t%lld\n", percpu_counter_sum(&m->op_resetxattrs));
+	seq_printf(s, "  op_call\t%lld\n", percpu_counter_sum(&m->op_call));
+	seq_printf(s, "  op_watch\t%lld\n", percpu_counter_sum(&m->op_watch));
+	seq_printf(s, "  op_notify\t%lld\n", percpu_counter_sum(&m->op_notify));
+
+	seq_printf(s, "  op_omap_rd\t%lld\n", percpu_counter_sum(&m->op_omap_rd));
+	seq_printf(s, "  op_omap_wr\t%lld\n", percpu_counter_sum(&m->op_omap_wr));
+	seq_printf(s, "  op_omap_del\t%lld\n", percpu_counter_sum(&m->op_omap_del));
+
+	seq_printf(s, "  op_linger_active\t%lld\n", percpu_counter_sum(&m->op_linger_active));
+	seq_printf(s, "  op_linger_send\t%lld\n", percpu_counter_sum(&m->op_linger_send));
+	seq_printf(s, "  op_linger_resend\t%lld\n", percpu_counter_sum(&m->op_linger_resend));
+	seq_printf(s, "  op_linger_ping\t%lld\n", percpu_counter_sum(&m->op_linger_ping));
+}
+
 static int osdc_show(struct seq_file *s, void *pp)
 {
 	struct ceph_client *client = s->private;
@@ -372,6 +420,9 @@ static int osdc_show(struct seq_file *s, void *pp)
 	}
 
 	up_read(&osdc->lock);
+
+	seq_printf(s, "OP METRIC:\n");
+	dump_op_metric(s, osdc);
 	return 0;
 }
 
