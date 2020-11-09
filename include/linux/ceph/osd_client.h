@@ -339,6 +339,50 @@ struct ceph_osd_backoff {
 	struct ceph_hobject_id *end;
 };
 
+struct ceph_osd_metric {
+	struct percpu_counter op_active;
+	struct percpu_counter op_oplen_avg;
+	struct percpu_counter op_send;
+	struct percpu_counter op_send_bytes;
+	struct percpu_counter op_resend;
+	struct percpu_counter op_reply;
+
+	struct percpu_counter op_rmw;
+	struct percpu_counter op_r;
+	struct percpu_counter op_w;
+	struct percpu_counter op_pgop;
+
+	struct percpu_counter op_stat;
+	struct percpu_counter op_create;
+	struct percpu_counter op_read;
+	struct percpu_counter op_write;
+	struct percpu_counter op_writefull;
+	struct percpu_counter op_append;
+	struct percpu_counter op_zero;
+	struct percpu_counter op_truncate;
+	struct percpu_counter op_delete;
+	struct percpu_counter op_mapext;
+	struct percpu_counter op_sparse_read;
+	struct percpu_counter op_clonerange;
+	struct percpu_counter op_getxattr;
+	struct percpu_counter op_setxattr;
+	struct percpu_counter op_cmpxattr;
+	struct percpu_counter op_rmxattr;
+	struct percpu_counter op_resetxattrs;
+	struct percpu_counter op_call;
+	struct percpu_counter op_watch;
+	struct percpu_counter op_notify;
+
+	struct percpu_counter op_omap_rd;
+	struct percpu_counter op_omap_wr;
+	struct percpu_counter op_omap_del;
+
+	struct percpu_counter op_linger_active;
+	struct percpu_counter op_linger_send;
+	struct percpu_counter op_linger_resend;
+	struct percpu_counter op_linger_ping;
+};
+
 #define CEPH_LINGER_ID_START	0xffff000000000000ULL
 
 struct ceph_osd_client {
@@ -370,6 +414,8 @@ struct ceph_osd_client {
 
 	struct ceph_msgpool	msgpool_op;
 	struct ceph_msgpool	msgpool_op_reply;
+
+	struct ceph_osd_metric  metric;
 
 	struct workqueue_struct	*notify_wq;
 	struct workqueue_struct	*completion_wq;
