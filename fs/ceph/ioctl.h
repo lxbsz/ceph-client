@@ -98,4 +98,19 @@ struct ceph_ioctl_dataloc {
  */
 #define CEPH_IOC_SYNCIO _IO(CEPH_IOCTL_MAGIC, 5)
 
+/*
+ * CEPH_IOC_GET_CLUSTER_AND_CLIENT_IDS - get the cluster and client ids
+ *
+ * This ioctl will return the cluster and client ids back to user space.
+ * With this we can easily know which mountpoint the file belongs to and
+ * also they can help locate the debugfs path quickly.
+ */
+
+struct cluster_client_ids {
+	char cluster_id[40];
+	char client_id[24];
+};
+#define CEPH_IOC_GET_CLUSTER_AND_CLIENT_IDS _IOR(CEPH_IOCTL_MAGIC, 6, \
+					struct cluster_client_ids)
+
 #endif

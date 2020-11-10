@@ -268,6 +268,27 @@ static long ceph_ioctl_syncio(struct file *file)
 	return 0;
 }
 
+/*
+ * Return the cluster and client ids
+ */
+static long ceph_ioctl_get_fs_ids(struct file *file, void __user *arg)
+{
+	struct inode *inode = file_inode(file);
+	struct ceph_fs_client *fsc = ceph_sb_to_client(inode->i_sb);
+	struct cluster_client_ids ids;
+
+	snprintf(ids.cluster_id, sizeof(ids.cluster_id), "%pU",
+		 &fsc->client->fsid);
+	snprintf(ids.client_id, sizeof(ids.client_id), "client%lld",
+		 ceph_client_gid(fsc->client));
+
+	/* send result back to user */
+	if (copy_to_user(arg, &ids, sizeof(ids)))
+		return -EFAULT;
+
+	return 0;
+}
+
 long ceph_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	dout("ioctl file %p cmd %u arg %lu\n", file, cmd, arg);
@@ -289,6 +310,8 @@ long ceph_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	case CEPH_IOC_SYNCIO:
 		return ceph_ioctl_syncio(file);
+	case CEPH_IOC_GET_CLUSTER_AND_CLIENT_IDS:
+		return ceph_ioctl_get_fs_ids(file, (void __user *)arg);
 	}
 
 	return -ENOTTY;
