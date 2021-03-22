@@ -152,6 +152,9 @@ struct ceph_client_metric {
 
 	spinlock_t read_metric_lock;
 	u64 total_reads;
+	u64 read_size_sum;
+	u64 read_size_min;
+	u64 read_size_max;
 	ktime_t read_latency_sum;
 	ktime_t read_latency_sq_sum;
 	ktime_t read_latency_min;
@@ -159,6 +162,9 @@ struct ceph_client_metric {
 
 	spinlock_t write_metric_lock;
 	u64 total_writes;
+	u64 write_size_sum;
+	u64 write_size_min;
+	u64 write_size_max;
 	ktime_t write_latency_sum;
 	ktime_t write_latency_sq_sum;
 	ktime_t write_latency_min;
@@ -206,10 +212,10 @@ static inline void ceph_update_cap_mis(struct ceph_client_metric *m)
 
 extern void ceph_update_read_metrics(struct ceph_client_metric *m,
 				     ktime_t r_start, ktime_t r_end,
-				     int rc);
+				     unsigned int size, int rc);
 extern void ceph_update_write_metrics(struct ceph_client_metric *m,
 				      ktime_t r_start, ktime_t r_end,
-				      int rc);
+				      unsigned int size, int rc);
 extern void ceph_update_metadata_metrics(struct ceph_client_metric *m,
 				         ktime_t r_start, ktime_t r_end,
 					 int rc);
