@@ -66,14 +66,15 @@ void ceph_get_snap_realm(struct ceph_mds_client *mdsc,
 			 struct ceph_snap_realm *realm)
 {
 	dout("get_realm %p %d -> %d\n", realm,
-	     atomic_read(&realm->nref), atomic_read(&realm->nref)+1);
+	     refcount_read(&realm->nref), refcount_read(&realm->nref)+1);
 	/*
 	 * since we _only_ increment realm refs or empty the empty
 	 * list with snap_rwsem held, adjusting the empty list here is
 	 * safe.  we do need to protect against concurrent empty list
 	 * additions, however.
 	 */
-	if (atomic_inc_return(&realm->nref) == 1) {
+	refcount_inc(&realm->nref);
+	if (refcount_read(&realm->nref) == 1) {
 		spin_lock(&mdsc->snap_empty_lock);
 		list_del_init(&realm->empty_item);
 		spin_unlock(&mdsc->snap_empty_lock);
@@ -117,7 +118,7 @@ static struct ceph_snap_realm *ceph_create_snap_realm(
 	if (!realm)
 		return ERR_PTR(-ENOMEM);
 
-	atomic_set(&realm->nref, 1);    /* for caller */
+	refcount_set(&realm->nref, 1);    /* for caller */
 	realm->ino = ino;
 	INIT_LIST_HEAD(&realm->children);
 	INIT_LIST_HEAD(&realm->child_item);
@@ -199,8 +200,8 @@ static void __put_snap_realm(struct ceph_mds_client *mdsc,
 			     struct ceph_snap_realm *realm)
 {
 	dout("__put_snap_realm %llx %p %d -> %d\n", realm->ino, realm,
-	     atomic_read(&realm->nref), atomic_read(&realm->nref)-1);
-	if (atomic_dec_and_test(&realm->nref))
+	     refcount_read(&realm->nref), refcount_read(&realm->nref)-1);
+	if (refcount_dec_and_test(&realm->nref))
 		__destroy_snap_realm(mdsc, realm);
 }
 
@@ -211,8 +212,8 @@ void ceph_put_snap_realm(struct ceph_mds_client *mdsc,
 			 struct ceph_snap_realm *realm)
 {
 	dout("put_snap_realm %llx %p %d -> %d\n", realm->ino, realm,
-	     atomic_read(&realm->nref), atomic_read(&realm->nref)-1);
-	if (!atomic_dec_and_test(&realm->nref))
+	     refcount_read(&realm->nref), refcount_read(&realm->nref)-1);
+	if (!refcount_dec_and_test(&realm->nref))
 		return;
 
 	if (down_write_trylock(&mdsc->snap_rwsem)) {
@@ -1034,7 +1035,8 @@ struct ceph_snapid_map* ceph_get_snapid_map(struct ceph_mds_client *mdsc,
 		} else if (snap < exist->snap) {
 			p = &(*p)->rb_right;
 		} else {
-			if (atomic_inc_return(&exist->ref) == 1)
+			refcount_inc(&exist->ref);
+			if (refcount_read(&exist->ref) == 1)
 				list_del_init(&exist->lru);
 			break;
 		}
@@ -1057,7 +1059,7 @@ struct ceph_snapid_map* ceph_get_snapid_map(struct ceph_mds_client *mdsc,
 	}
 
 	INIT_LIST_HEAD(&sm->lru);
-	atomic_set(&sm->ref, 1);
+	refcount_set(&sm->ref, 1);
 	sm->snap = snap;
 
 	exist = NULL;
@@ -1076,7 +1078,8 @@ struct ceph_snapid_map* ceph_get_snapid_map(struct ceph_mds_client *mdsc,
 		exist = NULL;
 	}
 	if (exist) {
-		if (atomic_inc_return(&exist->ref) == 1)
+		refcount_inc(&exist->ref);
+		if (refcount_read(&exist->ref) == 1)
 			list_del_init(&exist->lru);
 	} else {
 		rb_link_node(&sm->node, parent, p);
@@ -1099,7 +1102,7 @@ void ceph_put_snapid_map(struct ceph_mds_client* mdsc,
 {
 	if (!sm)
 		return;
-	if (atomic_dec_and_lock(&sm->ref, &mdsc->snapid_map_lock)) {
+	if (refcount_dec_and_lock(&sm->ref, &mdsc->snapid_map_lock)) {
 		if (!RB_EMPTY_NODE(&sm->node)) {
 			sm->last_used = jiffies;
 			list_add_tail(&sm->lru, &mdsc->snapid_map_lru);
@@ -1161,7 +1164,7 @@ void ceph_cleanup_snapid_map(struct ceph_mds_client *mdsc)
 		sm = list_first_entry(&to_free, struct ceph_snapid_map, lru);
 		list_del(&sm->lru);
 		free_anon_bdev(sm->dev);
-		if (WARN_ON_ONCE(atomic_read(&sm->ref))) {
+		if (WARN_ON_ONCE(refcount_read(&sm->ref))) {
 			pr_err("snapid map %llx -> %x still in use\n",
 			       sm->snap, sm->dev);
 		}

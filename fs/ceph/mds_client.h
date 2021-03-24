@@ -351,7 +351,7 @@ struct ceph_pool_perm {
 struct ceph_snapid_map {
 	struct rb_node node;
 	struct list_head lru;
-	atomic_t ref;
+	refcount_t ref;
 	u64 snap;
 	dev_t dev;
 	unsigned long last_used;
