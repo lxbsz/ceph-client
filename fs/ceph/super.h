@@ -542,7 +542,8 @@ static inline int ceph_ino_compare(struct inode *inode, void *data)
 
 static inline bool ceph_vino_is_reserved(const struct ceph_vino vino)
 {
-	if (vino.ino < CEPH_INO_SYSTEM_BASE && vino.ino != CEPH_INO_ROOT) {
+	if (vino.ino < CEPH_INO_SYSTEM_BASE && vino.ino != CEPH_INO_ROOT &&
+	    vino.ino != CEPH_INO_LOST_AND_FOUND ) {
 		WARN_RATELIMIT(1, "Attempt to access reserved inode number 0x%llx", vino.ino);
 		return true;
 	}
