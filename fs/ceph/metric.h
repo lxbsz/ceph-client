@@ -17,8 +17,10 @@ enum ceph_metric_type {
 	CLIENT_METRIC_TYPE_OPENED_FILES,
 	CLIENT_METRIC_TYPE_PINNED_ICAPS,
 	CLIENT_METRIC_TYPE_OPENED_INODES,
+	CLIENT_METRIC_TYPE_READ_IO_SIZES,
+	CLIENT_METRIC_TYPE_WRITE_IO_SIZES,
 
-	CLIENT_METRIC_TYPE_MAX = CLIENT_METRIC_TYPE_OPENED_INODES,
+	CLIENT_METRIC_TYPE_MAX = CLIENT_METRIC_TYPE_WRITE_IO_SIZES,
 };
 
 /*
@@ -34,6 +36,8 @@ enum ceph_metric_type {
 	CLIENT_METRIC_TYPE_OPENED_FILES,	\
 	CLIENT_METRIC_TYPE_PINNED_ICAPS,	\
 	CLIENT_METRIC_TYPE_OPENED_INODES,	\
+	CLIENT_METRIC_TYPE_READ_IO_SIZES,	\
+	CLIENT_METRIC_TYPE_WRITE_IO_SIZES,	\
 						\
 	CLIENT_METRIC_TYPE_MAX,			\
 }
@@ -101,6 +105,20 @@ struct ceph_opened_inodes {
 	struct ceph_metric_header header;
 	__le64 opened_inodes;
 	__le64 total;
+} __packed;
+
+/* metric read io size header */
+struct ceph_read_io_size {
+	struct ceph_metric_header header;
+	__le64 total_ops;
+	__le64 total_size;
+} __packed;
+
+/* metric write io size header */
+struct ceph_write_io_size {
+	struct ceph_metric_header header;
+	__le64 total_ops;
+	__le64 total_size;
 } __packed;
 
 struct ceph_metric_head {
