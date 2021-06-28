@@ -2286,6 +2286,7 @@ static int caps_are_flushed(struct inode *inode, u64 flush_tid)
  */
 static int unsafe_request_wait(struct inode *inode)
 {
+	struct ceph_mds_client *mdsc = ceph_sb_to_client(inode->i_sb)->mdsc;
 	struct ceph_inode_info *ci = ceph_inode(inode);
 	struct ceph_mds_request *req1 = NULL, *req2 = NULL;
 	int ret, err = 0;
@@ -2304,6 +2305,14 @@ static int unsafe_request_wait(struct inode *inode)
 		ceph_mdsc_get_request(req2);
 	}
 	spin_unlock(&ci->i_unsafe_lock);
+
+	/*
+	 * Trigger to flush the journal logs in all the MDSes manually,
+	 * or in the worst case we must wait at most 5 seconds to wait
+	 * the journal logs to be flushed by the MDSes periodically.
+	 */
+	if (req1 || req2)
+		flush_mdlog(mdsc);
 
 	dout("unsafe_request_wait %p wait on tid %llu %llu\n",
 	     inode, req1 ? req1->r_tid : 0ULL, req2 ? req2->r_tid : 0ULL);
