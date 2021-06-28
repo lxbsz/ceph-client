@@ -4689,6 +4689,34 @@ static void wait_requests(struct ceph_mds_client *mdsc)
 	dout("wait_requests done\n");
 }
 
+static void send_flush_mdlog(struct ceph_mds_session *s)
+{
+	u64 seq = s->s_seq;
+	struct ceph_msg *msg;
+
+	/*
+	 * For the MDS daemons lower than Luminous will crash when it
+	 * saw this unknown session request.
+	 */
+	if (!CEPH_HAVE_FEATURE(s->s_con.peer_features, SERVER_LUMINOUS))
+		return;
+
+	dout("%s to mds%d (%s)s seq %lld\n", __func__, s->s_mds,
+	     ceph_session_state_name(s->s_state), seq);
+	msg = ceph_create_session_msg(CEPH_SESSION_REQUEST_FLUSH_MDLOG, seq);
+	if (!msg) {
+		pr_err("failed to send_flush_mdlog to mds%d (%s)s seq %lld\n",
+		       s->s_mds, ceph_session_state_name(s->s_state), seq);
+	} else {
+		ceph_con_send(&s->s_con, msg);
+	}
+}
+
+void flush_mdlog(struct ceph_mds_client *mdsc)
+{
+	ceph_mdsc_iterate_sessions(mdsc, send_flush_mdlog, true);
+}
+
 /*
  * called before mount is ro, and before dentries are torn down.
  * (hmm, does this still race with new lookups?)
@@ -4698,6 +4726,7 @@ void ceph_mdsc_pre_umount(struct ceph_mds_client *mdsc)
 	dout("pre_umount\n");
 	mdsc->stopping = 1;
 
+	flush_mdlog(mdsc);
 	ceph_mdsc_iterate_sessions(mdsc, lock_unlock_session, false);
 	ceph_flush_dirty_caps(mdsc);
 	wait_requests(mdsc);

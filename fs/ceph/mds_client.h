@@ -537,6 +537,7 @@ extern int ceph_iterate_session_caps(struct ceph_mds_session *session,
 				     int (*cb)(struct inode *,
 					       struct ceph_cap *, void *),
 				     void *arg);
+extern void flush_mdlog(struct ceph_mds_client *mdsc);
 extern void ceph_mdsc_pre_umount(struct ceph_mds_client *mdsc);
 
 static inline void ceph_mdsc_free_path(char *path, int len)
