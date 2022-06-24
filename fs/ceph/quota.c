@@ -483,6 +483,7 @@ bool ceph_quota_update_statfs(struct ceph_fs_client *fsc, struct kstatfs *buf)
 	struct inode *in;
 	u64 total = 0, used, free;
 	bool is_updated = false;
+	u32 block_shift = CEPH_4K_BLOCK_SHIFT;
 
 	down_read(&mdsc->snap_rwsem);
 	realm = get_quota_realm(mdsc, d_inode(fsc->sb->s_root),
@@ -498,25 +499,32 @@ bool ceph_quota_update_statfs(struct ceph_fs_client *fsc, struct kstatfs *buf)
 		ci = ceph_inode(in);
 		spin_lock(&ci->i_ceph_lock);
 		if (ci->i_max_bytes) {
-			total = ci->i_max_bytes >> CEPH_BLOCK_SHIFT;
-			used = ci->i_rbytes >> CEPH_BLOCK_SHIFT;
-			/* For quota size less than 4MB, use 4KB block size */
-			if (!total) {
-				total = ci->i_max_bytes >> CEPH_4K_BLOCK_SHIFT;
-				used = ci->i_rbytes >> CEPH_4K_BLOCK_SHIFT;
-	                        buf->f_frsize = 1 << CEPH_4K_BLOCK_SHIFT;
-			}
-			/* It is possible for a quota to be exceeded.
+			/*
+			 * Switch to 4MB block size if quota size is
+			 * larger than or equals to 4MB and at the
+			 * same time is aligned to 4MB.
+			 */
+			if (IS_ALIGNED(ci->i_max_bytes, CEPH_BLOCK_SIZE))
+				block_shift = CEPH_BLOCK_SHIFT;
+
+			total = ci->i_max_bytes >> block_shift;
+			used = ci->i_rbytes >> block_shift;
+			buf->f_frsize = 1 << block_shift;
+
+			/*
+			 * It is possible for a quota to be exceeded.
 			 * Report 'zero' in that case
 			 */
 			free = total > used ? total - used : 0;
-			/* For quota size less than 4KB, report the
+			/*
+			 * For quota size less than 4KB, report the
 			 * total=used=4KB,free=0 when quota is full
-			 * and total=free=4KB, used=0 otherwise */
+			 * and total=free=4KB, used=0 otherwise
+			 */
 			if (!total) {
 				total = 1;
 				free = ci->i_max_bytes > ci->i_rbytes ? 1 : 0;
-	                        buf->f_frsize = 1 << CEPH_4K_BLOCK_SHIFT;
+	                        buf->f_frsize = CEPH_4K_BLOCK_SIZE;
 			}
 		}
 		spin_unlock(&ci->i_ceph_lock);
