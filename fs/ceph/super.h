@@ -25,9 +25,10 @@
 
 /* large granularity for statfs utilization stats to facilitate
  * large volume sizes on 32-bit machines. */
-#define CEPH_BLOCK_SHIFT   22  /* 4 MB */
-#define CEPH_BLOCK         (1 << CEPH_BLOCK_SHIFT)
+#define CEPH_BLOCK_SHIFT    22  /* 4 MB */
+#define CEPH_BLOCK_SIZE     (1 << CEPH_BLOCK_SHIFT)
 #define CEPH_4K_BLOCK_SHIFT 12  /* 4 KB */
+#define CEPH_4K_BLOCK_SIZE  (1 << CEPH_4K_BLOCK_SHIFT)
 
 #define CEPH_MOUNT_OPT_CLEANRECOVER    (1<<1) /* auto reonnect (clean mode) after blocklisted */
 #define CEPH_MOUNT_OPT_DIRSTAT         (1<<4) /* `cat dirname` for stats */

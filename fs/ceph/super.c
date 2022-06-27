@@ -70,7 +70,7 @@ static int ceph_statfs(struct dentry *dentry, struct kstatfs *buf)
 
 	/* fill in kstatfs */
 	buf->f_type = CEPH_SUPER_MAGIC;  /* ?? */
-	buf->f_frsize = 1 << CEPH_BLOCK_SHIFT;
+	buf->f_frsize = CEPH_BLOCK_SIZE;
 
 	/*
 	 * By default use root quota for stats; fallback to overall filesystem
@@ -79,9 +79,9 @@ static int ceph_statfs(struct dentry *dentry, struct kstatfs *buf)
 	 */
 	if (ceph_test_mount_opt(fsc, NOQUOTADF) ||
 	    !ceph_quota_update_statfs(fsc, buf)) {
-		buf->f_blocks = le64_to_cpu(st.kb) >> (CEPH_BLOCK_SHIFT-10);
-		buf->f_bfree = le64_to_cpu(st.kb_avail) >> (CEPH_BLOCK_SHIFT-10);
-		buf->f_bavail = le64_to_cpu(st.kb_avail) >> (CEPH_BLOCK_SHIFT-10);
+		buf->f_blocks = le64_to_cpu(st.kb) >> CEPH_4K_BLOCK_SHIFT;
+		buf->f_bfree = le64_to_cpu(st.kb_avail) >> CEPH_4K_BLOCK_SHIFT;
+		buf->f_bavail = le64_to_cpu(st.kb_avail) >> CEPH_4K_BLOCK_SHIFT;
 	}
 
 	/*
