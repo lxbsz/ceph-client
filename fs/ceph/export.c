@@ -182,6 +182,7 @@ struct inode *ceph_lookup_inode(struct super_block *sb, u64 ino)
 static struct dentry *__fh_to_dentry(struct super_block *sb, u64 ino)
 {
 	struct inode *inode = __lookup_inode(sb, ino);
+	struct dentry *dentry;
 	int err;
 
 	if (IS_ERR(inode))
@@ -197,7 +198,15 @@ static struct dentry *__fh_to_dentry(struct super_block *sb, u64 ino)
 		iput(inode);
 		return ERR_PTR(-ESTALE);
 	}
-	return d_obtain_alias(inode);
+
+	/* -ESTALE if the dentry is unhashed, which should being released */
+	dentry = d_obtain_alias(inode);
+	if (d_unhashed(dentry)) {
+		dput(dentry);
+		return ERR_PTR(-ESTALE);
+	}
+
+	return dentry;
 }
 
 static struct dentry *__snapfh_to_dentry(struct super_block *sb,
