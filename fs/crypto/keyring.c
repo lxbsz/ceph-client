@@ -234,7 +234,11 @@ void fscrypt_destroy_keyring(struct super_block *sb)
 			 * There should be no structural refs beyond the one
 			 * associated with the active ref.
 			 */
-			WARN_ON(refcount_read(&mk->mk_active_refs) != 1);
+			if (refcount_read(&mk->mk_active_refs) != 1) {
+				printk("fscrypt_destroy_keyring: mk_active_refs = %d\n",
+				       refcount_read(&mk->mk_active_refs));
+				WARN_ON(refcount_read(&mk->mk_active_refs) != 1);
+			}
 			WARN_ON(refcount_read(&mk->mk_struct_refs) != 1);
 			WARN_ON(!is_master_key_secret_present(&mk->mk_secret));
 			wipe_master_key_secret(&mk->mk_secret);
