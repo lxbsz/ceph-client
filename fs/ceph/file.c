@@ -976,6 +976,9 @@ static ssize_t ceph_sync_read(struct kiocb *iocb, struct iov_iter *to,
 	dout("sync_read on file %p %llu~%u %s\n", file, off, (unsigned)len,
 	     (file->f_flags & O_DIRECT) ? "O_DIRECT" : "");
 
+	if (ceph_inode_is_shutdown(inode))
+		return -EIO;
+
 	if (!len)
 		return 0;
 	/*
@@ -1341,6 +1344,9 @@ ceph_direct_read_write(struct kiocb *iocb, struct iov_iter *iter,
 	bool write = iov_iter_rw(iter) == WRITE;
 	bool should_dirty = !write && user_backed_iter(iter);
 	bool sparse = ceph_test_mount_opt(fsc, SPARSEREAD);
+
+	if (ceph_inode_is_shutdown(inode))
+		return -EIO;
 
 	if (write && ceph_snap(file_inode(file)) != CEPH_NOSNAP)
 		return -EROFS;
@@ -2077,6 +2083,9 @@ static int ceph_zero_partial_object(struct inode *inode,
 	int ret = 0;
 	loff_t zero = 0;
 	int op;
+
+	if (ceph_inode_is_shutdown(inode))
+		return -EIO;
 
 	if (!length) {
 		op = offset ? CEPH_OSD_OP_DELETE : CEPH_OSD_OP_TRUNCATE;
