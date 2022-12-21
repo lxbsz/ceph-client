@@ -66,6 +66,7 @@
 #define CEPH_MAX_READDIR_DEFAULT        1024
 #define CEPH_MAX_READDIR_BYTES_DEFAULT  (512*1024)
 #define CEPH_SNAPDIRNAME_DEFAULT        ".snap"
+#define CEPH_UMOUNT_TIMEOUT_DEFAULT     msecs_to_jiffies(60 * 1000)
 
 /*
  * Delay telling the MDS we no longer want caps, in case we reopen
@@ -87,6 +88,7 @@ struct ceph_mount_options {
 	int caps_max;
 	unsigned int max_readdir;       /* max readdir result (entries) */
 	unsigned int max_readdir_bytes; /* max readdir result (bytes) */
+	unsigned int umount_timeout;    /* jiffies */
 
 	bool new_dev_syntax;
 
@@ -1413,4 +1415,7 @@ extern bool ceph_quota_update_statfs(struct ceph_fs_client *fsc,
 				     struct kstatfs *buf);
 extern void ceph_cleanup_quotarealms_inodes(struct ceph_mds_client *mdsc);
 
+bool ceph_inc_mds_stopping_blocker(struct ceph_mds_client *mdsc,
+			       struct ceph_mds_session *session);
+void ceph_dec_mds_stopping_blocker(struct ceph_mds_client *mdsc);
 #endif /* _FS_CEPH_SUPER_H */
