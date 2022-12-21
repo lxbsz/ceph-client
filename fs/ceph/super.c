@@ -1477,11 +1477,33 @@ nomem:
 static void ceph_kill_sb(struct super_block *s)
 {
 	struct ceph_fs_client *fsc = ceph_sb_to_client(s);
+	bool wait;
 
 	dout("kill_sb %p\n", s);
 
 	ceph_mdsc_pre_umount(fsc->mdsc);
 	flush_fs_workqueues(fsc);
+
+	/*
+	 * Though the kill_anon_super() will finally trigger the
+	 * sync_filesystem() anyway, we still need to do it here and
+	 * then bump the stage of shutdown. This will drop any further
+	 * message, which makes no sense any more, from MDSs.
+	 *
+	 * Without this when evicting the inodes it may fail in the
+	 * kill_anon_super(), which will trigger a warning when
+	 * destroying the fscrypt keyring and then possibly trigger
+	 * a further crash in ceph module when iput() the inodes.
+	 */
+	sync_filesystem(s);
+
+	mutex_lock(&fsc->mdsc->mutex);
+	fsc->mdsc->stopping = CEPH_MDSC_STOPPING_FLUSHED;
+	wait = !!atomic_read(&fsc->mdsc->stopping_blockers);
+	mutex_unlock(&fsc->mdsc->mutex);
+
+	while (wait && atomic_read(&fsc->mdsc->stopping_blockers))
+		wait_for_completion_io_timeout(&fsc->mdsc->stopping_waiter, HZ);
 
 	kill_anon_super(s);
 

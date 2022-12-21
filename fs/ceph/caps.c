@@ -4222,6 +4222,14 @@ void ceph_handle_caps(struct ceph_mds_session *session,
 
 	dout("handle_caps from mds%d\n", session->s_mds);
 
+	mutex_lock(&mdsc->mutex);
+	if (mdsc->stopping >= CEPH_MDSC_STOPPING_FLUSHED) {
+		mutex_unlock(&mdsc->mutex);
+		return;
+	}
+	atomic_inc(&mdsc->stopping_blockers);
+	mutex_unlock(&mdsc->mutex);
+
 	/* decode */
 	end = msg->front.iov_base + msg->front.iov_len;
 	if (msg->front.iov_len < sizeof(*h))
@@ -4435,6 +4443,9 @@ done:
 done_unlocked:
 	iput(inode);
 out:
+	atomic_dec(&mdsc->stopping_blockers);
+	complete_all(&mdsc->stopping_waiter);
+
 	ceph_put_string(extra_info.pool_ns);
 
 	/* Defer closing the sessions after s_mutex lock being released */

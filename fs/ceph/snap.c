@@ -1011,6 +1011,14 @@ void ceph_handle_snap(struct ceph_mds_client *mdsc,
 	int locked_rwsem = 0;
 	bool close_sessions = false;
 
+	mutex_lock(&mdsc->mutex);
+	if (mdsc->stopping >= CEPH_MDSC_STOPPING_FLUSHED) {
+		mutex_unlock(&mdsc->mutex);
+		return;
+	}
+	atomic_inc(&mdsc->stopping_blockers);
+	mutex_unlock(&mdsc->mutex);
+
 	/* decode */
 	if (msg->front.iov_len < sizeof(*h))
 		goto bad;
@@ -1134,12 +1142,17 @@ skip_inode:
 	up_write(&mdsc->snap_rwsem);
 
 	flush_snaps(mdsc);
+	atomic_dec(&mdsc->stopping_blockers);
+	complete_all(&mdsc->stopping_waiter);
 	return;
 
 bad:
 	pr_err("%s corrupt snap message from mds%d\n", __func__, mds);
 	ceph_msg_dump(msg);
 out:
+	atomic_dec(&mdsc->stopping_blockers);
+	complete_all(&mdsc->stopping_waiter);
+
 	if (locked_rwsem)
 		up_write(&mdsc->snap_rwsem);
 

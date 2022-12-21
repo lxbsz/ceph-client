@@ -4869,6 +4869,14 @@ static void handle_lease(struct ceph_mds_client *mdsc,
 
 	dout("handle_lease from mds%d\n", mds);
 
+	mutex_lock(&mdsc->mutex);
+	if (mdsc->stopping >= CEPH_MDSC_STOPPING_FLUSHED) {
+		mutex_unlock(&mdsc->mutex);
+		return;
+	}
+	atomic_inc(&mdsc->stopping_blockers);
+	mutex_unlock(&mdsc->mutex);
+
 	/* decode */
 	if (msg->front.iov_len < sizeof(*h) + sizeof(u32))
 		goto bad;
@@ -4950,9 +4958,15 @@ release:
 out:
 	mutex_unlock(&session->s_mutex);
 	iput(inode);
+
+	atomic_dec(&mdsc->stopping_blockers);
+	complete_all(&mdsc->stopping_waiter);
 	return;
 
 bad:
+	atomic_dec(&mdsc->stopping_blockers);
+	complete_all(&mdsc->stopping_waiter);
+
 	pr_err("corrupt lease message\n");
 	ceph_msg_dump(msg);
 }
@@ -5148,6 +5162,8 @@ int ceph_mdsc_init(struct ceph_fs_client *fsc)
 	}
 
 	init_completion(&mdsc->safe_umount_waiters);
+	atomic_set(&mdsc->stopping_blockers, 0);
+	init_completion(&mdsc->stopping_waiter);
 	init_waitqueue_head(&mdsc->session_close_wq);
 	INIT_LIST_HEAD(&mdsc->waiting_for_map);
 	mdsc->quotarealms_inodes = RB_ROOT;
@@ -5262,7 +5278,7 @@ void send_flush_mdlog(struct ceph_mds_session *s)
 void ceph_mdsc_pre_umount(struct ceph_mds_client *mdsc)
 {
 	dout("pre_umount\n");
-	mdsc->stopping = 1;
+	mdsc->stopping = CEPH_MDSC_STOPPING_BEGAIN;
 
 	ceph_mdsc_iterate_sessions(mdsc, send_flush_mdlog, true);
 	ceph_mdsc_iterate_sessions(mdsc, lock_unlock_session, false);

@@ -47,6 +47,14 @@ void ceph_handle_quota(struct ceph_mds_client *mdsc,
 	struct inode *inode;
 	struct ceph_inode_info *ci;
 
+	mutex_lock(&mdsc->mutex);
+	if (mdsc->stopping >= CEPH_MDSC_STOPPING_FLUSHED) {
+		mutex_unlock(&mdsc->mutex);
+		return;
+	}
+	atomic_inc(&mdsc->stopping_blockers);
+	mutex_unlock(&mdsc->mutex);
+
 	if (msg->front.iov_len < sizeof(*h)) {
 		pr_err("%s corrupt message mds%d len %d\n", __func__,
 		       session->s_mds, (int)msg->front.iov_len);
@@ -78,6 +86,8 @@ void ceph_handle_quota(struct ceph_mds_client *mdsc,
 	spin_unlock(&ci->i_ceph_lock);
 
 	iput(inode);
+	atomic_dec(&mdsc->stopping_blockers);
+	complete_all(&mdsc->stopping_waiter);
 }
 
 static struct ceph_quotarealm_inode *
