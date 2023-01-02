@@ -3724,6 +3724,8 @@ static void handle_reply(struct ceph_mds_session *session, struct ceph_msg *msg)
 		if (err) {
 			up_write(&mdsc->snap_rwsem);
 			close_sessions = true;
+			if (err == -EIO)
+				ceph_msg_dump(msg);
 			goto out_err;
 		}
 		downgrade_write(&mdsc->snap_rwsem);
