@@ -2507,7 +2507,7 @@ static void submit_request(struct ceph_osd_request *req, bool wrlocked)
 	__submit_request(req, wrlocked);
 }
 
-static void finish_request(struct ceph_osd_request *req)
+static void __finish_request(struct ceph_osd_request *req)
 {
 	struct ceph_osd_client *osdc = req->r_osdc;
 
@@ -2515,12 +2515,6 @@ static void finish_request(struct ceph_osd_request *req)
 	dout("%s req %p tid %llu\n", __func__, req, req->r_tid);
 
 	req->r_end_latency = ktime_get();
-
-	if (req->r_osd) {
-		ceph_init_sparse_read(&req->r_osd->o_sparse_read);
-		unlink_request(req->r_osd, req);
-	}
-	atomic_dec(&osdc->num_requests);
 
 	/*
 	 * If an OSD has failed or returned and a request has been sent
@@ -2532,13 +2526,46 @@ static void finish_request(struct ceph_osd_request *req)
 	ceph_msg_revoke_incoming(req->r_reply);
 }
 
+static void __remove_request(struct ceph_osd_request *req)
+{
+	struct ceph_osd_client *osdc = req->r_osdc;
+
+	dout("%s req %p tid %llu\n", __func__, req, req->r_tid);
+
+	if (req->r_osd) {
+		ceph_init_sparse_read(&req->r_osd->o_sparse_read);
+		unlink_request(req->r_osd, req);
+	}
+	atomic_dec(&osdc->num_requests);
+}
+
+static void finish_request(struct ceph_osd_request *req)
+{
+	__finish_request(req);
+	__remove_request(req);
+}
+
 static void __complete_request(struct ceph_osd_request *req)
 {
+	struct ceph_osd_client *osdc = req->r_osdc;
+	struct ceph_osd *osd = req->r_osd;
+
 	dout("%s req %p tid %llu cb %ps result %d\n", __func__, req,
 	     req->r_tid, req->r_callback, req->r_result);
 
 	if (req->r_callback)
 		req->r_callback(req);
+
+	down_read(&osdc->lock);
+	if (osd) {
+		mutex_lock(&osd->lock);
+		__remove_request(req);
+		mutex_unlock(&osd->lock);
+	} else {
+		atomic_dec(&osdc->num_requests);
+	}
+	up_read(&osdc->lock);
+
 	complete_all(&req->r_completion);
 	ceph_osdc_put_request(req);
 }
@@ -3873,7 +3900,7 @@ static void handle_reply(struct ceph_osd *osd, struct ceph_msg *msg)
 	WARN_ON(!(m.flags & CEPH_OSD_FLAG_ONDISK));
 	req->r_version = m.user_version;
 	req->r_result = m.result ?: data_len;
-	finish_request(req);
+	__finish_request(req);
 	mutex_unlock(&osd->lock);
 	up_read(&osdc->lock);
 
