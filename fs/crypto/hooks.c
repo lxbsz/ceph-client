@@ -117,6 +117,43 @@ int __fscrypt_prepare_readdir(struct inode *dir)
 }
 EXPORT_SYMBOL_GPL(__fscrypt_prepare_readdir);
 
+/**
+ * fscrypt_prepare_lookup_partial() - prepare lookup without filenames handling
+ * @dir: inode of parent directory
+ * @dentry: dentry to lookup
+ *
+ * This function can be used by filesystems that want/need to handle filename
+ * encryption and no-key name encoding themselves, and thus aren't able to use
+ * function fscrypt_prepare_lookup().
+
+ * This helper can be called from lookup and atomic open operations.  It will
+ * try to set the encryption info on the in @dir if the key is available and, if
+ * it isn't, it will also set the @dentry as non-key.
+ *
+ * The reason it needs to get the encryption info before checking if the
+ * directory has the encryption key is because the key may be available but the
+ * encryption info isn't yet set (maybe due to a drop_caches).  The regular open
+ * path will use fscrypt_prepare_lookup(), but if a filesystem can't use this
+ * function (because it handles the filename encryption and no-key dentries) the
+ * atomic_open requires a different approach.
+ *
+ * Return: 0 on success, or an error code if fscrypt_get_encryption_info()
+ * 	   fails.
+ */
+int fscrypt_prepare_lookup_partial(struct inode *dir, struct dentry *dentry)
+{
+	int err = fscrypt_get_encryption_info(dir, true);
+
+	if (!err && !fscrypt_has_encryption_key(dir)) {
+		spin_lock(&dentry->d_lock);
+		dentry->d_flags |= DCACHE_NOKEY_NAME;
+		spin_unlock(&dentry->d_lock);
+	}
+
+	return err;
+}
+EXPORT_SYMBOL_GPL(fscrypt_prepare_lookup_partial);
+
 int __fscrypt_prepare_setattr(struct dentry *dentry, struct iattr *attr)
 {
 	if (attr->ia_valid & ATTR_SIZE)
