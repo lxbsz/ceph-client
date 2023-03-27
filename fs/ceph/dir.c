@@ -120,7 +120,7 @@ static int note_last_dentry(struct ceph_dir_file_info *dfi, const char *name,
 	memcpy(dfi->last_name, name, len);
 	dfi->last_name[len] = 0;
 	dfi->next_offset = next_offset;
-	dout("note_last_dentry '%s'\n", dfi->last_name);
+	dout("%s note_last_dentry '%s'\n", __func__, dfi->last_name);
 	return 0;
 }
 
@@ -191,7 +191,8 @@ static int __dcache_readdir(struct file *file,  struct dir_context *ctx,
 	u64 idx = 0;
 	int err = 0;
 
-	dout("__dcache_readdir %p v%u at %llx\n", dir, (unsigned)shared_gen, ctx->pos);
+	dout("%s %p v%u at %llx\n", __func__, dir, (unsigned)shared_gen,
+	     ctx->pos);
 
 	/* search start position */
 	if (ctx->pos > 2) {
@@ -221,7 +222,7 @@ static int __dcache_readdir(struct file *file,  struct dir_context *ctx,
 			dput(dentry);
 		}
 
-		dout("__dcache_readdir %p cache idx %llu\n", dir, idx);
+		dout("%s %p cache idx %llu\n", __func__, dir, idx);
 	}
 
 
@@ -257,7 +258,7 @@ static int __dcache_readdir(struct file *file,  struct dir_context *ctx,
 		spin_unlock(&dentry->d_lock);
 
 		if (emit_dentry) {
-			dout(" %llx dentry %p %pd %p\n", di->offset,
+			dout(" %llx dentry %p:'%pd' %p\n", di->offset,
 			     dentry, dentry, d_inode(dentry));
 			ctx->pos = di->offset;
 			if (!dir_emit(ctx, dentry->d_name.name,
@@ -317,13 +318,13 @@ static int ceph_readdir(struct file *file, struct dir_context *ctx)
 	unsigned frag = -1;
 	struct ceph_mds_reply_info_parsed *rinfo;
 
-	dout("readdir %p file %p pos %llx\n", inode, file, ctx->pos);
+	dout("%s %p file %p pos %llx\n", __func__, inode, file, ctx->pos);
 	if (dfi->file_info.flags & CEPH_F_ATEND)
 		return 0;
 
 	/* always start with . and .. */
 	if (ctx->pos == 0) {
-		dout("readdir off 0 -> '.'\n");
+		dout("%s off 0 -> '.'\n", __func__);
 		if (!dir_emit(ctx, ".", 1, ceph_present_inode(inode),
 			    inode->i_mode >> 12))
 			return 0;
@@ -337,7 +338,7 @@ static int ceph_readdir(struct file *file, struct dir_context *ctx)
 		ino = ceph_present_inode(dentry->d_parent->d_inode);
 		spin_unlock(&dentry->d_lock);
 
-		dout("readdir off 1 -> '..'\n");
+		dout("%s off 1 -> '..'\n", __func__);
 		if (!dir_emit(ctx, "..", 2, ino, inode->i_mode >> 12))
 			return 0;
 		ctx->pos = 2;
@@ -391,7 +392,7 @@ more:
 			frag = fpos_frag(ctx->pos);
 		}
 
-		dout("readdir fetching %llx.%llx frag %x offset '%s'\n",
+		dout("%s fetching %llx.%llx frag %x offset '%s'\n", __func__,
 		     ceph_vinop(inode), frag, dfi->last_name);
 		req = ceph_mdsc_create_request(mdsc, op, USE_AUTH_MDS);
 		if (IS_ERR(req))
@@ -445,9 +446,9 @@ more:
 			ceph_mdsc_put_request(req);
 			return err;
 		}
-		dout("readdir got and parsed readdir result=%d on "
+		dout("%s got and parsed readdir result=%d on "
 		     "frag %x, end=%d, complete=%d, hash_order=%d\n",
-		     err, frag,
+		     __func__, err, frag,
 		     (int)req->r_reply_info.dir_end,
 		     (int)req->r_reply_info.dir_complete,
 		     (int)req->r_reply_info.hash_order);
@@ -480,7 +481,7 @@ more:
 				dfi->dir_ordered_count = req->r_dir_ordered_cnt;
 			}
 		} else {
-			dout("readdir !did_prepopulate\n");
+			dout("%s !did_prepopulate\n", __func__);
 			/* disable readdir cache */
 			dfi->readdir_cache_idx = -1;
 			/* preclude from marking dir complete */
@@ -507,8 +508,8 @@ more:
 	}
 
 	rinfo = &dfi->last_readdir->r_reply_info;
-	dout("readdir frag %x num %d pos %llx chunk first %llx\n",
-	     dfi->frag, rinfo->dir_nr, ctx->pos,
+	dout("%s frag %x num %d pos %llx chunk first %llx\n",
+	     __func__, dfi->frag, rinfo->dir_nr, ctx->pos,
 	     rinfo->dir_nr ? rinfo->dir_entries[0].offset : 0LL);
 
 	i = 0;
@@ -538,7 +539,7 @@ more:
 			return -EIO;
 
 		ctx->pos = rde->offset;
-		dout("readdir (%d/%d) -> %llx '%.*s' %p\n",
+		dout("%s (%d/%d) -> %llx '%.*s' %p\n", __func__,
 		     i, rinfo->dir_nr, ctx->pos,
 		     rde->name_len, rde->name, &rde->inode.in);
 
@@ -582,7 +583,7 @@ more:
 			kfree(dfi->last_name);
 			dfi->last_name = NULL;
 		}
-		dout("readdir next frag is %x\n", frag);
+		dout("%s next frag is %x\n", __func__, frag);
 		goto more;
 	}
 	dfi->file_info.flags |= CEPH_F_ATEND;
@@ -610,7 +611,7 @@ more:
 					dfi->dir_ordered_count);
 		spin_unlock(&ci->i_ceph_lock);
 	}
-	dout("readdir %p file %p done.\n", inode, file);
+	dout("%s %p file %p done.\n", __func__, inode, file);
 	return 0;
 }
 
@@ -675,7 +676,7 @@ static loff_t ceph_dir_llseek(struct file *file, loff_t offset, int whence)
 
 	if (offset >= 0) {
 		if (need_reset_readdir(dfi, offset)) {
-			dout("dir_llseek dropping %p content\n", file);
+			dout("%s dropping %p content\n", __func__, file);
 			reset_readdir(dfi);
 		} else if (is_hash_order(offset) && offset > file->f_pos) {
 			/* for hash offset, we don't know if a forward seek
@@ -712,8 +713,8 @@ struct dentry *ceph_handle_snapdir(struct ceph_mds_request *req,
 		struct inode *inode = ceph_get_snapdir(parent);
 
 		res = d_splice_alias(inode, dentry);
-		dout("ENOENT on snapdir %p '%pd', linking to snapdir %p. Spliced dentry %p\n",
-		     dentry, dentry, inode, res);
+		dout("ENOENT on snapdir %p:'%pd', linking to snapdir %p. Spliced dentry %p:'%pd'\n",
+		     dentry, dentry, inode, res, res);
 		if (res)
 			dentry = res;
 	}
@@ -738,8 +739,8 @@ struct dentry *ceph_finish_lookup(struct ceph_mds_request *req,
 		/* no trace? */
 		err = 0;
 		if (!req->r_reply_info.head->is_dentry) {
-			dout("ENOENT and no trace, dentry %p inode %p\n",
-			     dentry, d_inode(dentry));
+			dout("ENOENT and no trace, dentry %p:'%pd' inode %p\n",
+			     dentry, dentry, d_inode(dentry));
 			if (d_really_is_positive(dentry)) {
 				d_drop(dentry);
 				err = -ENOENT;
@@ -777,8 +778,7 @@ static struct dentry *ceph_lookup(struct inode *dir, struct dentry *dentry,
 	int mask;
 	int err;
 
-	dout("lookup %p dentry %p '%pd'\n",
-	     dir, dentry, dentry);
+	dout("%s %p dentry %p:'%pd'\n", __func__, dir, dentry, dentry);
 
 	if (dentry->d_name.len > NAME_MAX)
 		return ERR_PTR(-ENAMETOOLONG);
@@ -849,7 +849,7 @@ static struct dentry *ceph_lookup(struct inode *dir, struct dentry *dentry,
 	}
 	dentry = ceph_finish_lookup(req, dentry, err);
 	ceph_mdsc_put_request(req);  /* will dput(dentry) */
-	dout("lookup result=%p\n", dentry);
+	dout("%s result=%p:'%pd'\n", __func__, dentry, dentry);
 	return dentry;
 }
 
@@ -900,8 +900,8 @@ static int ceph_mknod(struct mnt_idmap *idmap, struct inode *dir,
 		goto out;
 	}
 
-	dout("mknod in dir %p dentry %p mode 0%ho rdev %d\n",
-	     dir, dentry, mode, rdev);
+	dout("%s in dir %p dentry %p:'%pd' mode 0%ho rdev %d\n",
+	     __func__, dir, dentry, dentry, mode, rdev);
 	req = ceph_mdsc_create_request(mdsc, CEPH_MDS_OP_MKNOD, USE_AUTH_MDS);
 	if (IS_ERR(req)) {
 		err = PTR_ERR(req);
@@ -1005,7 +1005,8 @@ static int ceph_symlink(struct mnt_idmap *idmap, struct inode *dir,
 		goto out;
 	}
 
-	dout("symlink in dir %p dentry %p to '%s'\n", dir, dentry, dest);
+	dout("%s in dir %p dentry %p:'%pd' to '%s'\n", __func__, dir, dentry,
+	     dentry, dest);
 	req = ceph_mdsc_create_request(mdsc, CEPH_MDS_OP_SYMLINK, USE_AUTH_MDS);
 	if (IS_ERR(req)) {
 		err = PTR_ERR(req);
@@ -1073,7 +1074,8 @@ static int ceph_mkdir(struct mnt_idmap *idmap, struct inode *dir,
 		dout("mksnap dir %p snap '%pd' dn %p\n", dir,
 		     dentry, dentry);
 	} else if (ceph_snap(dir) == CEPH_NOSNAP) {
-		dout("mkdir dir %p dn %p mode 0%ho\n", dir, dentry, mode);
+		dout("mkdir dir %p dn %p:'%pd' mode 0%ho\n", dir, dentry,
+		     dentry, mode);
 		op = CEPH_MDS_OP_MKDIR;
 	} else {
 		err = -EROFS;
@@ -1151,8 +1153,8 @@ static int ceph_link(struct dentry *old_dentry, struct inode *dir,
 	if (err)
 		return err;
 
-	dout("link in dir %p old_dentry %p dentry %p\n", dir,
-	     old_dentry, dentry);
+	dout("%s in dir %p old_dentry %p:'%pd' dentry %p:'%pd'\n", __func__, dir,
+	     old_dentry, old_dentry, dentry, dentry);
 	req = ceph_mdsc_create_request(mdsc, CEPH_MDS_OP_LINK, USE_AUTH_MDS);
 	if (IS_ERR(req)) {
 		d_drop(dentry);
@@ -1189,7 +1191,7 @@ static void ceph_async_unlink_cb(struct ceph_mds_client *mdsc,
 			le32_to_cpu(req->r_reply_info.head->result);
 
 	if (!test_bit(CEPH_DENTRY_ASYNC_UNLINK_BIT, &di->flags))
-		pr_warn("%s dentry %p:%pd async unlink bit is not set\n",
+		pr_warn("%s dentry %p:'%pd' async unlink bit is not set\n",
 			__func__, dentry, dentry);
 
 	spin_lock(&fsc->async_unlink_conflict_lock);
@@ -1287,8 +1289,8 @@ static int ceph_unlink(struct inode *dir, struct dentry *dentry)
 		dout("rmsnap dir %p '%pd' dn %p\n", dir, dentry, dentry);
 		op = CEPH_MDS_OP_RMSNAP;
 	} else if (ceph_snap(dir) == CEPH_NOSNAP) {
-		dout("unlink/rmdir dir %p dn %p inode %p\n",
-		     dir, dentry, inode);
+		dout("unlink/rmdir dir %p dn %p:'%pd' inode %p\n",
+		     dir, dentry, dentry, inode);
 		op = d_is_dir(dentry) ?
 			CEPH_MDS_OP_RMDIR : CEPH_MDS_OP_UNLINK;
 	} else
@@ -1396,8 +1398,8 @@ static int ceph_rename(struct mnt_idmap *idmap, struct inode *old_dir,
 	if (err)
 		return err;
 
-	dout("rename dir %p dentry %p to dir %p dentry %p\n",
-	     old_dir, old_dentry, new_dir, new_dentry);
+	dout("%s dir %p dentry %p:'%pd' to dir %p dentry %p:'%pd'\n", __func__,
+	     old_dir, old_dentry, old_dentry, new_dir, new_dentry, new_dentry);
 	req = ceph_mdsc_create_request(mdsc, op, USE_AUTH_MDS);
 	if (IS_ERR(req))
 		return PTR_ERR(req);
@@ -1444,7 +1446,7 @@ void __ceph_dentry_lease_touch(struct ceph_dentry_info *di)
 	struct dentry *dn = di->dentry;
 	struct ceph_mds_client *mdsc;
 
-	dout("dentry_lease_touch %p %p '%pd'\n", di, dn, dn);
+	dout("%s %p %p:'%pd'\n", __func__, di, dn, dn);
 
 	di->flags |= CEPH_DENTRY_LEASE_LIST;
 	if (di->flags & CEPH_DENTRY_SHRINK_LIST) {
@@ -1478,7 +1480,7 @@ void __ceph_dentry_dir_lease_touch(struct ceph_dentry_info *di)
 	struct dentry *dn = di->dentry;
 	struct ceph_mds_client *mdsc;
 
-	dout("dentry_dir_lease_touch %p %p '%pd' (offset 0x%llx)\n",
+	dout("%s_touch %p %p:'%pd' (offset 0x%llx)\n", __func__,
 	     di, dn, dn, di->offset);
 
 	if (!list_empty(&di->lease_list)) {
@@ -1772,7 +1774,7 @@ static int dentry_lease_is_valid(struct dentry *dentry, unsigned int flags)
 					 CEPH_MDS_LEASE_RENEW, seq);
 		ceph_put_mds_session(session);
 	}
-	dout("dentry_lease_is_valid - dentry %p = %d\n", dentry, valid);
+	dout("%s dentry %p:'%pd' = %d\n", __func__, dentry, dentry, valid);
 	return valid;
 }
 
@@ -1836,8 +1838,8 @@ static int dir_lease_is_valid(struct inode *dir, struct dentry *dentry,
 			valid = 0;
 		spin_unlock(&dentry->d_lock);
 	}
-	dout("dir_lease_is_valid dir %p v%u dentry %p = %d\n",
-	     dir, (unsigned)atomic_read(&ci->i_shared_gen), dentry, valid);
+	dout("%s dir %p v%u dentry %p:'%pd' = %d\n", __func__, dir,
+	     (unsigned)atomic_read(&ci->i_shared_gen), dentry, dentry, valid);
 	return valid;
 }
 
@@ -1867,14 +1869,15 @@ static int ceph_d_revalidate(struct dentry *dentry, unsigned int flags)
 		inode = d_inode(dentry);
 	}
 
-	dout("d_revalidate %p '%pd' inode %p offset 0x%llx nokey %d\n", dentry,
-	     dentry, inode, ceph_dentry(dentry)->offset, !!(dentry->d_flags & DCACHE_NOKEY_NAME));
+	dout("%s %p:'%pd' inode %p offset 0x%llx nokey %d\n", __func__,
+	     dentry, dentry, inode, ceph_dentry(dentry)->offset,
+	     !!(dentry->d_flags & DCACHE_NOKEY_NAME));
 
 	mdsc = ceph_sb_to_client(dir->i_sb)->mdsc;
 
 	/* always trust cached snapped dentries, snapdir dentry */
 	if (ceph_snap(dir) != CEPH_NOSNAP) {
-		dout("d_revalidate %p '%pd' inode %p is SNAPPED\n", dentry,
+		dout("%s %p:'%pd' inode %p is SNAPPED\n", __func__, dentry,
 		     dentry, inode);
 		valid = 1;
 	} else if (inode && ceph_snap(inode) == CEPH_SNAPDIR) {
@@ -1930,14 +1933,15 @@ static int ceph_d_revalidate(struct dentry *dentry, unsigned int flags)
 				break;
 			}
 			ceph_mdsc_put_request(req);
-			dout("d_revalidate %p lookup result=%d\n",
-			     dentry, err);
+			dout("%s %p:'%pd' lookup result=%d\n", __func__,
+			     dentry, dentry, err);
 		}
 	} else {
 		percpu_counter_inc(&mdsc->metric.d_lease_hit);
 	}
 
-	dout("d_revalidate %p %s\n", dentry, valid ? "valid" : "invalid");
+	dout("%s %p:'%pd' %s\n", __func__, dentry, dentry,
+	     valid ? "valid" : "invalid");
 	if (!valid)
 		ceph_dir_clear_complete(dir);
 
@@ -1979,7 +1983,7 @@ static void ceph_d_release(struct dentry *dentry)
 	struct ceph_dentry_info *di = ceph_dentry(dentry);
 	struct ceph_fs_client *fsc = ceph_sb_to_client(dentry->d_sb);
 
-	dout("d_release %p\n", dentry);
+	dout("%s dentry %p:'%pd'\n", __func__, dentry, dentry);
 
 	atomic64_dec(&fsc->mdsc->metric.total_dentries);
 
@@ -2003,7 +2007,7 @@ static void ceph_d_prune(struct dentry *dentry)
 	struct ceph_inode_info *dir_ci;
 	struct ceph_dentry_info *di;
 
-	dout("ceph_d_prune %pd %p\n", dentry, dentry);
+	dout("%s dentry %p:'%pd'\n", __func__, dentry, dentry);
 
 	/* do we have a valid parent? */
 	if (IS_ROOT(dentry))
