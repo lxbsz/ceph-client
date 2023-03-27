@@ -5441,6 +5441,14 @@ void ceph_mdsc_close_sessions(struct ceph_mds_client *mdsc)
 			session = ceph_get_mds_session(mdsc->sessions[i]);
 			__unregister_session(mdsc, session);
 			mutex_unlock(&mdsc->mutex);
+
+			/*
+			 * This is useful when debugging the mds side
+			 * qa test failures
+			 */
+			pr_warn("force tearing down session mds%d\n",
+				session->s_mds);
+
 			mutex_lock(&session->s_mutex);
 			remove_session_caps(session);
 			mutex_unlock(&session->s_mutex);
