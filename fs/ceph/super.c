@@ -1528,9 +1528,9 @@ static void ceph_kill_sb(struct super_block *s)
 	wait = !!atomic_read(&fsc->mdsc->stopping_blockers);
 	spin_unlock(&fsc->mdsc->stopping_lock);
 
-	while (wait || atomic_read(&fsc->mdsc->stopping_blockers)) {
-		wait = false;
-		wait_for_completion(&fsc->mdsc->stopping_waiter);
+	if (wait) {
+		while (atomic_read(&fsc->mdsc->stopping_blockers))
+			wait_for_completion(&fsc->mdsc->stopping_waiter);
 	}
 
 	kill_anon_super(s);

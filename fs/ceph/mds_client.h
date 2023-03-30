@@ -399,7 +399,7 @@ struct cap_wait {
 };
 
 enum {
-	CEPH_MDSC_STOPPING_BEGAIN = 1,
+	CEPH_MDSC_STOPPING_BEGIN = 1,
 	CEPH_MDSC_STOPPING_FLUSHED = 2,
 };
 
