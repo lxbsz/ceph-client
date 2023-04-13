@@ -846,7 +846,7 @@ static void __touch_cap(struct ceph_cap *cap)
 	struct ceph_mds_session *s = cap->session;
 
 	spin_lock(&s->s_cap_lock);
-	if (!s->s_cap_iterator) {
+	if (!s->s_cap_iterator && !list_empty(&cap->session_caps) && !cap->queue_release) {
 		dout("__touch_cap %p cap %p mds%d\n", &cap->ci->netfs.inode, cap,
 		     s->s_mds);
 		list_move_tail(&cap->session_caps, &s->s_caps);
