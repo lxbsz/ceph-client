@@ -248,14 +248,19 @@ static int metrics_caps_show(struct seq_file *s, void *p)
 	return 0;
 }
 
-static int caps_show_cb(struct inode *inode, struct ceph_cap *cap, void *p)
+static int caps_show_cb(struct inode *inode, struct rb_node *ci_node, void *p)
 {
+	struct ceph_inode_info *ci = ceph_inode(inode);
 	struct seq_file *s = p;
+	struct ceph_cap *cap;
 
+	spin_lock(&ci->i_ceph_lock);
+	cap = rb_entry(ci_node, struct ceph_cap, ci_node);
 	seq_printf(s, "0x%-17llx%-3d%-17s%-17s\n", ceph_ino(inode),
 		   cap->session->s_mds,
 		   ceph_cap_string(cap->issued),
 		   ceph_cap_string(cap->implemented));
+	spin_unlock(&ci->i_ceph_lock);
 	return 0;
 }
 
