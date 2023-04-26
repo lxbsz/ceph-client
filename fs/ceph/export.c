@@ -79,7 +79,7 @@ static int ceph_encode_snapfh(struct inode *inode, u32 *rawfh, int *max_len,
 	*max_len = snap_handle_length;
 	ret = FILEID_BTRFS_WITH_PARENT;
 out:
-	dout("encode_snapfh %llx.%llx ret=%d\n", ceph_vinop(inode), ret);
+	dout("%s %p %llx.%llx ret=%d\n", __func__, inode, ceph_vinop(inode), ret);
 	return ret;
 }
 
@@ -105,15 +105,15 @@ static int ceph_encode_fh(struct inode *inode, u32 *rawfh, int *max_len,
 
 	if (parent_inode) {
 		struct ceph_nfs_confh *cfh = (void *)rawfh;
-		dout("encode_fh %llx with parent %llx\n",
-		     ceph_ino(inode), ceph_ino(parent_inode));
+		dout("%s %p %llx.%llx with parent %llx\n", __func__, inode,
+		     ceph_vinop(inode), ceph_ino(parent_inode));
 		cfh->ino = ceph_ino(inode);
 		cfh->parent_ino = ceph_ino(parent_inode);
 		*max_len = connected_handle_length;
 		type = FILEID_INO32_GEN_PARENT;
 	} else {
 		struct ceph_nfs_fh *fh = (void *)rawfh;
-		dout("encode_fh %llx\n", ceph_ino(inode));
+		dout("%s %p %llx.%llx\n", __func__, inode, ceph_vinop(inode));
 		fh->ino = ceph_ino(inode);
 		*max_len = handle_length;
 		type = FILEID_INO32_GEN;
@@ -278,11 +278,11 @@ static struct dentry *__snapfh_to_dentry(struct super_block *sb,
 	ceph_mdsc_put_request(req);
 
 	if (want_parent) {
-		dout("snapfh_to_parent %llx.%llx\n err=%d\n",
+		dout("%s %llx.%llx\n err=%d\n", __func__,
 		     vino.ino, vino.snap, err);
 	} else {
-		dout("snapfh_to_dentry %llx.%llx parent %llx hash %x err=%d",
-		      vino.ino, vino.snap, sfh->parent_ino, sfh->hash, err);
+		dout("%s %llx.%llx parent %llx hash %x err=%d", __func__,
+		     vino.ino, vino.snap, sfh->parent_ino, sfh->hash, err);
 	}
 	if (IS_ERR(inode))
 		return ERR_CAST(inode);
@@ -310,7 +310,7 @@ static struct dentry *ceph_fh_to_dentry(struct super_block *sb,
 	if (fh_len < sizeof(*fh) / 4)
 		return NULL;
 
-	dout("fh_to_dentry %llx\n", fh->ino);
+	dout("%s %llx\n", __func__, fh->ino);
 	return __fh_to_dentry(sb, fh->ino);
 }
 
@@ -402,7 +402,7 @@ static struct dentry *ceph_get_parent(struct dentry *child)
 		dn = __get_parent(child->d_sb, child, 0);
 	}
 out:
-	dout("get_parent %p ino %llx.%llx err=%ld\n",
+	dout("%s %p %llx.%llx err=%ld\n", __func__,
 	     child, ceph_vinop(inode), (long)PTR_ERR_OR_ZERO(dn));
 	return dn;
 }
@@ -526,7 +526,7 @@ out:
 	if (req)
 		ceph_mdsc_put_request(req);
 	kfree(last_name);
-	dout("get_snap_name %p ino %llx.%llx err=%d\n",
+	dout("%s %p %llx.%llx err=%d\n", __func__,
 	     child, ceph_vinop(inode), err);
 	return err;
 }
@@ -540,6 +540,9 @@ static int ceph_get_name(struct dentry *parent, char *name,
 	struct inode *inode = d_inode(child);
 	struct ceph_mds_reply_info_parsed *rinfo;
 	int err;
+
+	dout("%s parent %p:'%pd' child %p:'%pd' name %s\n", __func__,
+	     parent, parent, child, child, name);
 
 	if (ceph_snap(inode) != CEPH_NOSNAP)
 		return __get_snap_name(parent, name, child);
@@ -588,9 +591,8 @@ static int ceph_get_name(struct dentry *parent, char *name,
 		ceph_fname_free_buffer(dir, &oname);
 	}
 out:
-	dout("get_name %p ino %llx.%llx err %d %s%s\n",
-		     child, ceph_vinop(inode), err,
-		     err ? "" : "name ", err ? "" : name);
+	dout("%s inode %p %llx.%llx err %d %s%s\n", __func__, inode,
+	     ceph_vinop(inode), err, err ? "" : "name ", err ? "" : name);
 	ceph_mdsc_put_request(req);
 	return err;
 }

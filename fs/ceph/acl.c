@@ -72,8 +72,8 @@ retry:
 	} else if (size == -ENODATA || size == 0) {
 		acl = NULL;
 	} else {
-		pr_err_ratelimited("get acl %llx.%llx failed, err=%d\n",
-				   ceph_vinop(inode), size);
+		pr_err_ratelimited("%s get acl %p %llx.%llx failed, err=%d\n",
+				   __func__, inode, ceph_vinop(inode), size);
 		acl = ERR_PTR(-EIO);
 	}
 

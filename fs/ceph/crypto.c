@@ -218,7 +218,8 @@ static struct inode *parse_longname(const struct inode *parent, const char *name
 	name++;
 	name_end = strrchr(name, '_');
 	if (!name_end) {
-		dout("Failed to parse long snapshot name: %s\n", name);
+		dout("%s failed to parse long snapshot name: %s\n", __func__,
+		     name);
 		return ERR_PTR(-EIO);
 	}
 	*name_len = (name_end - name);
@@ -235,7 +236,8 @@ static struct inode *parse_longname(const struct inode *parent, const char *name
 		return ERR_PTR(-ENOMEM);
 	ret = kstrtou64(inode_number, 10, &vino.ino);
 	if (ret) {
-		dout("Failed to parse inode number: %s\n", name);
+		dout("%s failed to parse inode number: %s\n", __func__,
+		     name);
 		dir = ERR_PTR(ret);
 		goto out;
 	}
@@ -249,7 +251,8 @@ static struct inode *parse_longname(const struct inode *parent, const char *name
 			dir = ERR_PTR(-ENOENT);
 	}
 	if (IS_ERR(dir))
-		dout("Can't find inode %s (%s)\n", inode_number, name);
+		dout("%s can't find inode %s (%s)\n", __func__, inode_number,
+		     name);
 
 out:
 	kfree(inode_number);
@@ -496,7 +499,8 @@ int ceph_fscrypt_decrypt_block_inplace(const struct inode *inode,
 				  struct page *page, unsigned int len,
 				  unsigned int offs, u64 lblk_num)
 {
-	dout("%s: len %u offs %u blk %llu\n", __func__, len, offs, lblk_num);
+	dout("%s %p %llx.%llx len %u offs %u blk %llu\n", __func__, inode,
+	     ceph_vinop(inode), len, offs, lblk_num);
 	return fscrypt_decrypt_block_inplace(inode, page, len, offs, lblk_num);
 }
 
@@ -504,7 +508,8 @@ int ceph_fscrypt_encrypt_block_inplace(const struct inode *inode,
 				  struct page *page, unsigned int len,
 				  unsigned int offs, u64 lblk_num, gfp_t gfp_flags)
 {
-	dout("%s: len %u offs %u blk %llu\n", __func__, len, offs, lblk_num);
+	dout("%s %p %llx.%llx len %u offs %u blk %llu\n", __func__, inode,
+	     ceph_vinop(inode), len, offs, lblk_num);
 	return fscrypt_encrypt_block_inplace(inode, page, len, offs, lblk_num, gfp_flags);
 }
 
@@ -577,7 +582,8 @@ int ceph_fscrypt_decrypt_extents(struct inode *inode, struct page **page, u64 of
 
 	/* Nothing to do for empty array */
 	if (ext_cnt == 0) {
-		dout("%s: empty array, ret 0\n", __func__);
+		dout("%s %p %llx.%llx empty array, ret 0\n", __func__,
+		     inode, ceph_vinop(inode));
 		return 0;
 	}
 
@@ -591,14 +597,15 @@ int ceph_fscrypt_decrypt_extents(struct inode *inode, struct page **page, u64 of
 		int fret;
 
 		if ((ext->off | ext->len) & ~CEPH_FSCRYPT_BLOCK_MASK) {
-			pr_warn("%s: bad encrypted sparse extent idx %d off %llx len %llx\n",
-				__func__, i, ext->off, ext->len);
+			pr_warn("%s %p %llx.%llx bad encrypted sparse extent"
+				" idx %d off %llx len %llx\n", __func__, inode,
+				ceph_vinop(inode), i, ext->off, ext->len);
 			return -EIO;
 		}
 		fret = ceph_fscrypt_decrypt_pages(inode, &page[pgidx],
 						 off + pgsoff, ext->len);
-		dout("%s: [%d] 0x%llx~0x%llx fret %d\n", __func__, i,
-				ext->off, ext->len, fret);
+		dout("%s %p %llx.%llx [%d] 0x%llx~0x%llx fret %d\n", __func__,
+		     inode, ceph_vinop(inode), i, ext->off, ext->len, fret);
 		if (fret < 0) {
 			if (ret == 0)
 				ret = fret;
@@ -606,7 +613,7 @@ int ceph_fscrypt_decrypt_extents(struct inode *inode, struct page **page, u64 of
 		}
 		ret = pgsoff + fret;
 	}
-	dout("%s: ret %d\n", __func__, ret);
+	dout("%s ret %d\n", __func__, ret);
 	return ret;
 }
 
