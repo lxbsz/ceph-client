@@ -1464,16 +1464,20 @@ nomem:
 /*
  * Return true if mdsc successfully increase blocker counter,
  * or false if the mdsc is in stopping and flushed state.
+ *
+ * session: NULL then it's for osd requests or for mds requests.
  */
 bool ceph_inc_stopping_blocker(struct ceph_mds_client *mdsc,
 			       struct ceph_mds_session *session)
 {
-	mutex_lock(&session->s_mutex);
-	inc_session_sequence(session);
-	mutex_unlock(&session->s_mutex);
+	if (session) {
+		mutex_lock(&session->s_mutex);
+		inc_session_sequence(session);
+		mutex_unlock(&session->s_mutex);
+	}
 
 	spin_lock(&mdsc->stopping_lock);
-	if (mdsc->stopping >= CEPH_MDSC_STOPPING_FLUSHED) {
+	if (session && mdsc->stopping >= CEPH_MDSC_STOPPING_FLUSHED) {
 		spin_unlock(&mdsc->stopping_lock);
 		return false;
 	}
