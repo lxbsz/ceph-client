@@ -444,13 +444,14 @@ static int ceph_init_request(struct netfs_io_request *rreq, struct file *file)
 		struct ceph_rw_context *rw_ctx;
 		struct ceph_file_info *fi = file->private_data;
 
+		priv->file_ra_pages = file->f_ra.ra_pages;
+		priv->file_ra_disabled = file->f_mode & FMODE_RANDOM;
+
 		rw_ctx = ceph_find_rw_context(fi);
 		if (rw_ctx) {
-			kfree(priv);
+			rreq->netfs_priv = priv;
 			return 0;
 		}
-		priv->file_ra_pages = file->f_ra.ra_pages;
-		priv->file_ra_disabled = !!(file->f_mode & FMODE_RANDOM);
 	}
 
 	/*
@@ -490,7 +491,8 @@ static void ceph_netfs_free_request(struct netfs_io_request *rreq)
 	if (!priv)
 		return;
 
-	ceph_put_cap_refs(ceph_inode(rreq->inode), priv->caps);
+	if (priv->caps)
+		ceph_put_cap_refs(ceph_inode(rreq->inode), priv->caps);
 	kfree(priv);
 	rreq->netfs_priv = NULL;
 }
