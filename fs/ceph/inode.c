@@ -2923,6 +2923,7 @@ int ceph_permission(struct mnt_idmap *idmap, struct inode *inode,
 
 	if (!err)
 		err = generic_permission(&nop_mnt_idmap, inode, mask);
+	printk("lxb %s:%d, err: %d\n", __func__, __LINE__, err);
 	return err;
 }
 

@@ -419,6 +419,7 @@ struct inode *fuse_ilookup(struct fuse_conn *fc, u64 nodeid,
 	struct fuse_mount *fm_iter;
 	struct inode *inode;
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	WARN_ON(!rwsem_is_locked(&fc->killsb));
 	list_for_each_entry(fm_iter, &fc->mounts, fc_entry) {
 		if (!fm_iter->sb)

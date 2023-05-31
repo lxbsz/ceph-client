@@ -28,6 +28,7 @@ static int fuse_send_open(struct fuse_mount *fm, u64 nodeid,
 	struct fuse_open_in inarg;
 	FUSE_ARGS(args);
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.flags = open_flags & ~(O_CREAT | O_EXCL | O_NOCTTY);
 	if (!fm->fc->atomic_o_trunc)
@@ -133,6 +134,7 @@ struct fuse_file *fuse_file_open(struct fuse_mount *fm, u64 nodeid,
 	struct fuse_file *ff;
 	int opcode = isdir ? FUSE_OPENDIR : FUSE_OPEN;
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	ff = fuse_file_alloc(fm);
 	if (!ff)
 		return ERR_PTR(-ENOMEM);
@@ -173,6 +175,7 @@ int fuse_do_open(struct fuse_mount *fm, u64 nodeid, struct file *file,
 {
 	struct fuse_file *ff = fuse_file_open(fm, nodeid, file->f_flags, isdir);
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	if (!IS_ERR(ff))
 		file->private_data = ff;
 
@@ -339,6 +342,7 @@ void fuse_release_common(struct file *file, bool isdir)
 
 static int fuse_open(struct inode *inode, struct file *file)
 {
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	return fuse_open_common(inode, file, false);
 }
 

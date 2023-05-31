@@ -375,6 +375,7 @@ int fuse_lookup_name(struct super_block *sb, u64 nodeid, const struct qstr *name
 	u64 attr_version;
 	int err;
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	*inode = NULL;
 	err = -ENAMETOOLONG;
 	if (name->len > FUSE_NAME_MAX)
@@ -426,6 +427,7 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry,
 	bool outarg_valid = true;
 	bool locked;
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	if (fuse_is_bad(dir))
 		return ERR_PTR(-EIO);
 
@@ -629,6 +631,7 @@ static int fuse_create_open(struct inode *dir, struct dentry *entry,
 	struct fuse_file *ff;
 	bool trunc = flags & O_TRUNC;
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	/* Userspace expects S_IFREG in create mode */
 	BUG_ON((mode & S_IFMT) != S_IFREG);
 
@@ -732,6 +735,7 @@ static int fuse_atomic_open(struct inode *dir, struct dentry *entry,
 	struct fuse_conn *fc = get_fuse_conn(dir);
 	struct dentry *res = NULL;
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	if (fuse_is_bad(dir))
 		return -EIO;
 
@@ -848,6 +852,7 @@ static int fuse_mknod(struct mnt_idmap *idmap, struct inode *dir,
 	struct fuse_mount *fm = get_fuse_mount(dir);
 	FUSE_ARGS(args);
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	if (!fm->fc->dont_mask)
 		mode &= ~current_umask();
 
@@ -867,6 +872,7 @@ static int fuse_mknod(struct mnt_idmap *idmap, struct inode *dir,
 static int fuse_create(struct mnt_idmap *idmap, struct inode *dir,
 		       struct dentry *entry, umode_t mode, bool excl)
 {
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	return fuse_mknod(&nop_mnt_idmap, dir, entry, mode, 0);
 }
 
@@ -1165,6 +1171,7 @@ static int fuse_do_getattr(struct inode *inode, struct kstat *stat,
 	FUSE_ARGS(args);
 	u64 attr_version;
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	attr_version = fuse_get_attr_version(fm->fc);
 
 	memset(&inarg, 0, sizeof(inarg));
@@ -1377,6 +1384,7 @@ static int fuse_perm_getattr(struct inode *inode, int mask)
 	if (mask & MAY_NOT_BLOCK)
 		return -ECHILD;
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	forget_all_cached_acls(inode);
 	return fuse_do_getattr(inode, NULL, NULL);
 }
@@ -1401,6 +1409,7 @@ static int fuse_permission(struct mnt_idmap *idmap,
 	bool refreshed = false;
 	int err = 0;
 
+	printk("lxb %s:%d, mask: 0x%X, i_mode: 0x%X\n", __func__, __LINE__, mask, inode->i_mode);
 	if (fuse_is_bad(inode))
 		return -EIO;
 
@@ -1426,6 +1435,7 @@ static int fuse_permission(struct mnt_idmap *idmap,
 	}
 
 	if (fc->default_permissions) {
+		printk("lxb %s:%d\n", __func__, __LINE__);
 		err = generic_permission(&nop_mnt_idmap, inode, mask);
 
 		/* If permission is denied, try to refresh file
@@ -1454,6 +1464,7 @@ static int fuse_permission(struct mnt_idmap *idmap,
 				return -EACCES;
 		}
 	}
+	printk("lxb %s:%d, err: %d\n", __func__, __LINE__, err);
 	return err;
 }
 
@@ -1531,6 +1542,7 @@ out_err:
 
 static int fuse_dir_open(struct inode *inode, struct file *file)
 {
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	return fuse_open_common(inode, file, true);
 }
 
@@ -1755,6 +1767,7 @@ int fuse_do_setattr(struct dentry *dentry, struct iattr *attr,
 	bool trust_local_cmtime = is_wb;
 	bool fault_blocked = false;
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	if (!fc->default_permissions)
 		attr->ia_valid |= ATTR_FORCE;
 
@@ -1913,6 +1926,7 @@ static int fuse_setattr(struct mnt_idmap *idmap, struct dentry *entry,
 	struct file *file = (attr->ia_valid & ATTR_FILE) ? attr->ia_file : NULL;
 	int ret;
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	if (fuse_is_bad(inode))
 		return -EIO;
 
@@ -1975,6 +1989,7 @@ static int fuse_getattr(struct mnt_idmap *idmap,
 	struct inode *inode = d_inode(path->dentry);
 	struct fuse_conn *fc = get_fuse_conn(inode);
 
+	printk("lxb %s:%d\n", __func__, __LINE__);
 	if (fuse_is_bad(inode))
 		return -EIO;
 

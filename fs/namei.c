@@ -401,6 +401,7 @@ int generic_permission(struct mnt_idmap *idmap, struct inode *inode,
 {
 	int ret;
 
+//	printk("lxb %s:%d\n", __func__, __LINE__);
 	/*
 	 * Do the basic permission checks.
 	 */
@@ -3232,6 +3233,7 @@ static int may_open(struct mnt_idmap *idmap, const struct path *path,
 	struct inode *inode = dentry->d_inode;
 	int error;
 
+//	printk("lxb %s:%d, acc_mode: 0x%X, flag: 0x%X, inode: %p\n", __func__, __LINE__, acc_mode, flag, inode);
 	if (!inode)
 		return -ENOENT;
 
