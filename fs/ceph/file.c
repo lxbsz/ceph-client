@@ -1086,6 +1086,7 @@ ssize_t __ceph_sync_read(struct inode *inode, loff_t *ki_pos,
 		u64 read_off = off;
 		u64 read_len = len;
 		int extent_cnt;
+		int rd_flags = CEPH_OSD_FLAG_READ | osdc->client->options->read_from_replica;
 
 		/* determine new offset/length if encrypted */
 		ceph_fscrypt_adjust_off_and_len(inode, &read_off, &read_len);
@@ -1097,8 +1098,7 @@ ssize_t __ceph_sync_read(struct inode *inode, loff_t *ki_pos,
 					ci->i_vino, read_off, &read_len, 0, 1,
 					sparse ? CEPH_OSD_OP_SPARSE_READ :
 						 CEPH_OSD_OP_READ,
-					CEPH_OSD_FLAG_READ,
-					NULL, ci->i_truncate_seq,
+					rd_flags, NULL, ci->i_truncate_seq,
 					ci->i_truncate_size, false);
 		if (IS_ERR(req)) {
 			ret = PTR_ERR(req);
@@ -1480,6 +1480,7 @@ ceph_direct_read_write(struct kiocb *iocb, struct iov_iter *iter,
 	struct ceph_fs_client *fsc = ceph_inode_to_fs_client(inode);
 	struct ceph_client *cl = fsc->client;
 	struct ceph_client_metric *metric = &fsc->mdsc->metric;
+	struct ceph_osd_client *osdc = &fsc->client->osdc;
 	struct ceph_vino vino;
 	struct ceph_osd_request *req;
 	struct bio_vec *bvecs;
@@ -1515,7 +1516,7 @@ ceph_direct_read_write(struct kiocb *iocb, struct iov_iter *iter,
 
 		flags = /* CEPH_OSD_FLAG_ORDERSNAP | */ CEPH_OSD_FLAG_WRITE;
 	} else {
-		flags = CEPH_OSD_FLAG_READ;
+		flags = CEPH_OSD_FLAG_READ | osdc->client->options->read_from_replica;
 	}
 
 	while (iov_iter_count(iter) > 0) {
